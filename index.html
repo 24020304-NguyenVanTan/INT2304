@@ -1,986 +1,203 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cờ Kéo Búa Bao - RPS Tactical Arena</title>
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Phosphor Icons for UI & Piece Graphics -->
-  <script src="https://unpkg.com/@phosphor-icons/web"></script>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>2-Player Chess (playhtml)</title>
 
-    * {
-      box-sizing: border-box;
-      user-select: none;
-      -webkit-user-select: none;
-    }
+<!-- chess.js: move generation/validation + game state (classic global build) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 
-    body {
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      background: radial-gradient(circle at 50% 20%, #1e293b, #0f172a 80%);
-      color: #f1f5f9;
-      min-height: 100vh;
-    }
-
-    .font-mono {
-      font-family: 'JetBrains Mono', monospace;
-    }
-
-    /* Board Tile Colors */
-    .tile-light {
-      background-color: #334155;
-    }
-    .tile-dark {
-      background-color: #1e293b;
-    }
-    .tile-blue-base {
-      background-color: rgba(14, 165, 233, 0.35) !important;
-      border: 2px dashed rgba(56, 189, 248, 0.8) !important;
-    }
-    .tile-red-base {
-      background-color: rgba(244, 63, 94, 0.35) !important;
-      border: 2px dashed rgba(251, 113, 133, 0.8) !important;
-    }
-
-    /* Pulse effect on turn */
-    .turn-glow-blue {
-      box-shadow: 0 0 25px rgba(56, 189, 248, 0.5);
-      border-color: rgba(56, 189, 248, 0.8);
-    }
-    .turn-glow-red {
-      box-shadow: 0 0 25px rgba(244, 63, 94, 0.5);
-      border-color: rgba(251, 113, 133, 0.8);
-    }
-
-    /* Token styling matching photo circular pastel badges */
-    .token-blue {
-      background: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 60%, #0284c7 100%);
-      border: 3px solid #e0f2fe;
-      box-shadow: 0 4px 10px rgba(2, 132, 199, 0.45);
-      color: #034f75;
-    }
-    .token-red {
-      background: linear-gradient(135deg, #fbcfe8 0%, #f472b6 60%, #db2777 100%);
-      border: 3px solid #fdf2f8;
-      box-shadow: 0 4px 10px rgba(219, 39, 119, 0.45);
-      color: #700c3b;
-    }
-
-    .token-selected {
-      transform: scale(1.15);
-      z-index: 30;
-      animation: floatSelected 1.2s ease-in-out infinite alternate;
-    }
-
-    @keyframes floatSelected {
-      0% { transform: scale(1.15) translateY(0); filter: drop-shadow(0 0 12px #facc15); }
-      100% { transform: scale(1.15) translateY(-4px); filter: drop-shadow(0 0 20px #fde047); }
-    }
-
-    /* Move Indicators */
-    .move-target-dot {
-      width: 32%;
-      height: 32%;
-      background: rgba(74, 222, 128, 0.85);
-      border-radius: 50%;
-      box-shadow: 0 0 10px rgba(74, 222, 128, 0.9);
-      animation: pulseDot 1s infinite alternate;
-    }
-
-    .capture-target-ring {
-      width: 85%;
-      height: 85%;
-      border: 3px dashed #ef4444;
-      border-radius: 50%;
-      background: rgba(239, 68, 68, 0.25);
-      animation: spinRing 5s linear infinite;
-    }
-
-    @keyframes pulseDot {
-      from { transform: scale(0.8); opacity: 0.7; }
-      to { transform: scale(1.2); opacity: 1; }
-    }
-    @keyframes spinRing {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    /* Particle Explosion effect */
-    .particle {
-      position: absolute;
-      pointer-events: none;
-      border-radius: 50%;
-      animation: explode 0.6s ease-out forwards;
-    }
-    @keyframes explode {
-      0% { transform: translate(0, 0) scale(1); opacity: 1; }
-      100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
-    }
-  </style>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0;
+    padding: 2rem 1rem;
+    background: #f4f1ea;
+    color: #2b2b2b;
+  }
+  h1 { margin-bottom: 0.25rem; }
+  #status {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    min-height: 1.5em;
+    font-weight: 600;
+  }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(8, min(11vw, 60px));
+    grid-template-rows: repeat(8, min(11vw, 60px));
+    border: 4px solid #3b2f2f;
+    user-select: none;
+    cursor: pointer;
+  }
+  .square {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: min(8vw, 42px);
+    line-height: 1;
+  }
+  .light { background: #eeeed2; }
+  .dark  { background: #769656; }
+  .selected { outline: 4px solid #f7d51d; outline-offset: -4px; }
+  .legal::after {
+    content: "";
+    display: block;
+    width: 22%;
+    height: 22%;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.25);
+  }
+  #reset {
+    margin-top: 1rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-radius: 6px;
+    border: 1px solid #3b2f2f;
+    background: white;
+  }
+  p.hint { max-width: 480px; text-align: center; color: #555; font-size: 0.9rem; }
+</style>
 </head>
-<body class="p-2 sm:p-4 md:p-6 flex flex-col items-center justify-between min-h-screen">
+<body>
 
-  <!-- Top Navigation Bar -->
-  <header class="w-full max-w-6xl flex flex-wrap items-center justify-between gap-4 mb-3 px-3 py-2 bg-slate-800/80 backdrop-blur rounded-2xl border border-slate-700 shadow-xl">
-    <div class="flex items-center gap-3">
-      <div class="p-2 bg-gradient-to-tr from-sky-500 to-pink-500 rounded-xl text-white shadow-lg">
-        <i class="ph-bold ph-sword text-2xl"></i>
-      </div>
-      <div>
-        <h1 class="text-xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-sky-400 via-white to-pink-400">
-          CỜ KÉO BÚA BAO CHIẾN THUẬT
-        </h1>
-        <p class="text-xs text-slate-400">9x9 RPS Tactical Chess Arena</p>
-      </div>
-    </div>
+<h1>♟️ 2-Player Chess</h1>
+<p class="hint">
+  Share this page's URL with your opponent — anyone who opens it joins the same
+  game. It's White's move first; click a piece, then click a square to move it.
+  Only the side whose turn it is can move.
+</p>
 
-    <!-- Quick Rules Legend -->
-    <div class="hidden md:flex items-center gap-3 px-4 py-1.5 bg-slate-900/60 rounded-xl border border-slate-700/80 text-xs">
-      <span class="flex items-center gap-1 text-slate-300 font-semibold"><i class="ph-bold ph-hand-fist text-amber-400"></i> Búa đập</span>
-      <span class="text-slate-500">&gt;</span>
-      <span class="flex items-center gap-1 text-slate-300 font-semibold"><i class="ph-bold ph-scissors text-emerald-400"></i> Kéo cắt</span>
-      <span class="text-slate-500">&gt;</span>
-      <span class="flex items-center gap-1 text-slate-300 font-semibold"><i class="ph-bold ph-hand text-sky-400"></i> Bao bọc</span>
-      <span class="text-slate-500">&gt;</span>
-      <span class="text-slate-400">Búa</span>
-    </div>
+<div id="status"></div>
 
-    <!-- Action Buttons -->
-    <div class="flex items-center gap-2">
-      <button id="btn-sound" class="p-2 rounded-xl bg-slate-700 hover:bg-slate-600 transition text-slate-200 text-lg" title="Bật/Tắt âm thanh">
-        <i class="ph-bold ph-speaker-high" id="sound-icon"></i>
-      </button>
-      <button id="btn-undo" class="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-xs font-semibold text-slate-200 transition">
-        <i class="ph-bold ph-arrow-u-up-left text-sm"></i> Đi lại
-      </button>
-      <button id="btn-restart" class="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-xs font-semibold text-white transition shadow-lg shadow-rose-900/40">
-        <i class="ph-bold ph-arrows-counter-clockwise text-sm"></i> Làm mới
-      </button>
-      <button id="btn-help" class="p-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-300 text-lg" title="Hướng dẫn">
-        <i class="ph-bold ph-info"></i>
-      </button>
-    </div>
-  </header>
+<!-- can-play turns this wrapper into a synced, collaborative element via playhtml.
+     The board grid and the reset button both live inside it so both can use
+     the same onClick/setData wiring. -->
+<div id="board-wrap" can-play>
+  <div id="board"></div>
+  <button id="reset" data-action="reset">Reset game</button>
+</div>
 
-  <main class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-    
-    <!-- Left Sidebar: Red Player Info & Capture Grave -->
-    <div class="lg:col-span-3 flex flex-col gap-3 order-2 lg:order-1">
-      <div id="card-red" class="p-4 rounded-2xl bg-slate-800/90 border-2 border-slate-700 transition duration-300 flex flex-col gap-3 shadow-lg">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2.5">
-            <span class="w-4 h-4 rounded-full bg-pink-500 shadow-[0_0_10px_#ec4899]"></span>
-            <span class="font-bold text-base text-pink-300">ĐỘI ĐỎ (Red)</span>
-          </div>
-          <span class="text-xs px-2 py-0.5 rounded-md bg-pink-950 text-pink-300 border border-pink-700/50">Căn cứ I9</span>
-        </div>
-        <div class="flex items-center justify-between text-xs text-slate-400">
-          <span>Quân còn lại: <strong id="red-alive-count" class="text-white text-sm">9</strong>/9</span>
-          <span id="red-turn-badge" class="hidden px-2 py-0.5 rounded bg-pink-500/20 text-pink-300 font-bold border border-pink-500 animate-pulse">LƯỢT ĐI</span>
-        </div>
-        <!-- Captured by Red -->
-        <div class="bg-slate-900/70 p-2.5 rounded-xl border border-slate-700/60">
-          <div class="text-[11px] text-slate-400 font-semibold mb-1 flex items-center gap-1">
-            <i class="ph-bold ph-trophy text-pink-400"></i> Đã ăn được quân Xanh:
-          </div>
-          <div id="red-graveyard" class="flex flex-wrap gap-1.5 min-h-[36px] items-center">
-            <span class="text-xs text-slate-600 italic">Chưa ăn quân nào</span>
-          </div>
-        </div>
-      </div>
+<script>
+  const wrapEl = document.getElementById("board-wrap");
+  const boardEl = document.getElementById("board");
+  const statusEl = document.getElementById("status");
 
-      <!-- Live Action Log Box -->
-      <div class="p-3 rounded-2xl bg-slate-800/60 border border-slate-700/70 text-xs flex flex-col gap-1.5 shadow-md">
-        <div class="font-bold text-slate-300 flex items-center justify-between pb-1 border-b border-slate-700">
-          <span><i class="ph-bold ph-clock-counter-clockwise"></i> Nhật ký nước đi</span>
-          <span class="text-[10px] text-slate-500 font-mono" id="turn-counter">Lượt: #1</span>
-        </div>
-        <div id="log-box" class="h-28 overflow-y-auto space-y-1 pr-1 font-mono text-[11px] text-slate-300 scrollbar-thin">
-          <div class="text-slate-500 italic">Trò chơi bắt đầu. Quân Xanh đi trước!</div>
-        </div>
-      </div>
-    </div>
+  const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
+  const START_FEN = "start"; // chess.js accepts "start" as shorthand
 
-    <!-- Center: Interactive Game Board with Grid Notation -->
-    <div class="lg:col-span-6 flex flex-col items-center justify-center order-1 lg:order-2">
-      <!-- Turn Indicator Banner -->
-      <div id="turn-banner" class="mb-3 px-5 py-2 rounded-full font-extrabold text-sm flex items-center gap-2 shadow-lg transition-all duration-300">
-        <!-- Injected via JS -->
-      </div>
+  const PIECE_UNICODE = {
+    wp: "♙", wn: "♘", wb: "♗", wr: "♖", wq: "♕", wk: "♔",
+    bp: "♟", bn: "♞", bb: "♝", br: "♜", bq: "♛", bk: "♚",
+  };
 
-      <!-- Main Board Canvas Frame -->
-      <div class="relative p-2 sm:p-3 bg-gradient-to-b from-slate-700 to-slate-900 rounded-3xl shadow-2xl border-4 border-slate-600">
-        
-        <!-- Top Coordinate Labels (A - I) -->
-        <div class="grid grid-cols-9 text-center text-xs font-bold text-slate-400 font-mono mb-1 px-5">
-          <span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>H</span><span>I</span>
-        </div>
+  function gameFromFen(fen) {
+    const game = new Chess();
+    if (fen && fen !== START_FEN) game.load(fen);
+    return game;
+  }
 
-        <div class="flex items-center">
-          <!-- Left Coordinate Labels (9 down to 1) -->
-          <div class="flex flex-col justify-around text-xs font-bold text-slate-400 font-mono pr-1.5 h-[340px] sm:h-[450px] md:h-[500px]">
-            <span>9</span><span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
-          </div>
+  function statusText(game) {
+    if (game.in_checkmate()) {
+      return `Checkmate — ${game.turn() === "w" ? "Black" : "White"} wins! (click "Reset game" to play again)`;
+    }
+    if (game.in_draw() || game.in_stalemate() || game.in_threefold_repetition()) {
+      return "Draw.";
+    }
+    const side = game.turn() === "w" ? "White" : "Black";
+    return game.in_check() ? `${side} to move — check!` : `${side} to move`;
+  }
 
-          <!-- 9x9 Board Tiles Grid Container -->
-          <div id="board" class="grid grid-cols-9 grid-rows-9 gap-1 w-[330px] h-[330px] sm:w-[440px] sm:h-[440px] md:w-[490px] md:h-[490px] bg-slate-900 p-1 rounded-2xl shadow-inner relative overflow-hidden">
-            <!-- 81 tiles dynamically rendered -->
-          </div>
+  // Renders the DOM from the shared data. Called on load and whenever
+  // the synced data changes (locally or from the other player).
+  function render(data) {
+    const game = gameFromFen(data.fen);
+    const legalTargets = data.selected
+      ? game.moves({ square: data.selected, verbose: true }).map((m) => m.to)
+      : [];
 
-          <!-- Right Coordinate Labels -->
-          <div class="flex flex-col justify-around text-xs font-bold text-slate-400 font-mono pl-1.5 h-[340px] sm:h-[450px] md:h-[500px]">
-            <span>9</span><span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
-          </div>
-        </div>
+    boardEl.innerHTML = "";
+    for (let rank = 8; rank >= 1; rank--) {
+      for (let fileIdx = 0; fileIdx < 8; fileIdx++) {
+        const square = FILES[fileIdx] + rank;
+        const sq = document.createElement("div");
+        sq.dataset.square = square;
+        sq.className =
+          "square " + ((fileIdx + rank) % 2 === 0 ? "dark" : "light");
+        if (square === data.selected) sq.classList.add("selected");
+        if (legalTargets.includes(square)) sq.classList.add("legal");
 
-        <!-- Bottom Coordinate Labels -->
-        <div class="grid grid-cols-9 text-center text-xs font-bold text-slate-400 font-mono mt-1 px-5">
-          <span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>H</span><span>I</span>
-        </div>
+        const piece = game.get(square);
+        if (piece) sq.textContent = PIECE_UNICODE[piece.color + piece.type];
 
-        <!-- Float Target Notification (e.g. Infiltration win alert) -->
-        <div id="floating-msg" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-0 transition duration-300 z-50 text-center font-extrabold text-lg px-4 py-2 rounded-xl backdrop-blur bg-black/80 border shadow-2xl"></div>
-      </div>
-    </div>
-
-    <!-- Right Sidebar: Blue Player Info & Strategy Hint -->
-    <div class="lg:col-span-3 flex flex-col gap-3 order-3">
-      <div id="card-blue" class="p-4 rounded-2xl bg-slate-800/90 border-2 border-slate-700 transition duration-300 flex flex-col gap-3 shadow-lg">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2.5">
-            <span class="w-4 h-4 rounded-full bg-sky-400 shadow-[0_0_10px_#38bdf8]"></span>
-            <span class="font-bold text-base text-sky-300">ĐỘI XANH (Blue)</span>
-          </div>
-          <span class="text-xs px-2 py-0.5 rounded-md bg-sky-950 text-sky-300 border border-sky-700/50">Căn cứ A1</span>
-        </div>
-        <div class="flex items-center justify-between text-xs text-slate-400">
-          <span>Quân còn lại: <strong id="blue-alive-count" class="text-white text-sm">9</strong>/9</span>
-          <span id="blue-turn-badge" class="hidden px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-bold border border-sky-500 animate-pulse">LƯỢT ĐI</span>
-        </div>
-        <!-- Captured by Blue -->
-        <div class="bg-slate-900/70 p-2.5 rounded-xl border border-slate-700/60">
-          <div class="text-[11px] text-slate-400 font-semibold mb-1 flex items-center gap-1">
-            <i class="ph-bold ph-trophy text-sky-400"></i> Đã ăn được quân Đỏ:
-          </div>
-          <div id="blue-graveyard" class="flex flex-wrap gap-1.5 min-h-[36px] items-center">
-            <span class="text-xs text-slate-600 italic">Chưa ăn quân nào</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Win Conditions & Goals Card -->
-      <div class="p-3.5 rounded-2xl bg-slate-800/60 border border-slate-700/70 text-xs text-slate-300 flex flex-col gap-2">
-        <div class="font-bold text-slate-200 flex items-center gap-1.5 text-sm">
-          <i class="ph-bold ph-flag-banner text-amber-400 text-base"></i> 2 Cách để Chiến Thắng:
-        </div>
-        <ul class="space-y-1.5 text-[12px] list-disc list-inside text-slate-300">
-          <li><span class="font-semibold text-amber-300">Chiếm căn cứ địch:</span> Đưa 1 quân bất kỳ đến căn cứ đối phương (<strong class="text-pink-400">I9</strong> cho Xanh, <strong class="text-sky-400">A1</strong> cho Đỏ).</li>
-          <li><span class="font-semibold text-amber-300">Tiêu diệt toàn bộ:</span> Ăn sạch 9 quân của đối thủ hoặc đối phương không còn nước đi hợp lệ.</li>
-        </ul>
-        <div class="mt-1 pt-2 border-t border-slate-700/60 text-[11px] text-slate-400">
-          💡 <em>Mẹo: Quân cùng loại (ví dụ Kéo gặp Kéo) không thể ăn nhau. Bạn chỉ có thể ăn quân mình khắc chế!</em>
-        </div>
-      </div>
-
-      <!-- PlayHTML Network Integration Hint box -->
-      <div class="p-3 rounded-2xl bg-gradient-to-br from-indigo-950/70 to-slate-900/90 border border-indigo-700/50 text-[11px] text-indigo-200 flex flex-col gap-1.5">
-        <div class="flex items-center gap-1.5 font-bold text-indigo-300">
-          <i class="ph-bold ph-globe-hemisphere-east text-base"></i> Đồng bộ PlayHTML:
-        </div>
-        <p class="leading-relaxed">
-          Được thiết kế theo cấu trúc state phản ứng. Dễ dàng gắn kết với <code class="bg-indigo-900/80 px-1 py-0.5 rounded text-white font-mono">playhtml.reactive()</code> để chơi 2 máy qua mạng.
-        </p>
-      </div>
-    </div>
-  </main>
-
-  <!-- Victory / Game Over Modal -->
-  <div id="victory-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 hidden">
-    <div class="bg-slate-900 border-2 border-slate-700 p-6 sm:p-8 rounded-3xl max-w-md w-full text-center shadow-2xl relative animate-bounce-once">
-      <div id="victory-badge" class="w-20 h-20 mx-auto rounded-full flex items-center justify-center text-4xl mb-4 shadow-xl">
-        <i class="ph-bold ph-crown"></i>
-      </div>
-      <h2 id="victory-title" class="text-2xl sm:text-3xl font-black mb-2">CHIẾN THẮNG!</h2>
-      <p id="victory-reason" class="text-sm text-slate-300 mb-6 leading-relaxed"></p>
-      
-      <div class="flex gap-3 justify-center">
-        <button id="modal-btn-restart" class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg transition">
-          <i class="ph-bold ph-arrow-counter-clockwise mr-1"></i> Chơi Ván Mới
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Help / Rules Modal -->
-  <div id="help-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
-    <div class="bg-slate-900 border border-slate-700 p-6 rounded-3xl max-w-lg w-full shadow-2xl text-left">
-      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
-        <h3 class="text-lg font-bold text-white flex items-center gap-2">
-          <i class="ph-bold ph-book-open text-sky-400"></i> Luật Chơi Cờ Kéo Búa Bao
-        </h3>
-        <button id="btn-close-help" class="text-slate-400 hover:text-white text-lg"><i class="ph-bold ph-x"></i></button>
-      </div>
-      <div class="py-4 space-y-3 text-sm text-slate-300">
-        <p><strong>1. Bàn cờ & Quân cờ:</strong> Bàn cờ 9x9 ô. Mỗi bên có 9 quân xếp thành hình cụm tam giác chéo tương ứng như trong hình chụp:</p>
-        <div class="grid grid-cols-3 gap-2 py-2 text-center text-xs">
-          <div class="p-2 rounded-xl bg-slate-800 border border-slate-700">
-            <span class="text-lg">✊</span><br><strong>BÚA (Rock)</strong><br><span class="text-slate-400">Thắng Kéo</span>
-          </div>
-          <div class="p-2 rounded-xl bg-slate-800 border border-slate-700">
-            <span class="text-lg">✌️</span><br><strong>KÉO (Scissors)</strong><br><span class="text-slate-400">Thắng Bao</span>
-          </div>
-          <div class="p-2 rounded-xl bg-slate-800 border border-slate-700">
-            <span class="text-lg">✋</span><br><strong>BAO (Paper)</strong><br><span class="text-slate-400">Thắng Búa</span>
-          </div>
-        </div>
-        <p><strong>2. Di chuyển:</strong> Mỗi lượt, bạn được chọn 1 quân của mình di chuyển <strong>1 ô theo chiều dọc hoặc ngang</strong> (trên, dưới, trái, phải) vào ô trống hoặc ô có quân đối thủ.</p>
-        <p><strong>3. Tấn công (Ăn quân):</strong> Bạn chỉ có thể tiến vào ô của quân địch nếu loại quân của bạn <em>khắc chế</em> quân địch theo quy tắc Kéo-Búa-Bao. Quân cùng loại hoặc quân thua không thể tấn công.</p>
-        <p><strong>4. Điều kiện thắng:</strong> Đột kích thành công ô Căn cứ đối phương (<strong class="text-pink-400">I9</strong> của Đỏ, <strong class="text-sky-400">A1</strong> của Xanh), hoặc tiêu diệt toàn bộ quân đối phương.</p>
-      </div>
-      <div class="pt-2 text-right">
-        <button id="btn-understood" class="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded-xl text-white font-bold text-xs">Đã hiểu</button>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    // Audio FX using Web Audio API to prevent external audio asset dependencies
-    class SoundEngine {
-      constructor() {
-        this.ctx = null;
-        this.muted = false;
-      }
-      init() {
-        if (!this.ctx) {
-          const AudioContext = window.AudioContext || window.webkitAudioContext;
-          this.ctx = new AudioContext();
-        }
-      }
-      playMove() {
-        if (this.muted) return;
-        this.init();
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(320, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(540, this.ctx.currentTime + 0.08);
-        gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.start();
-        osc.stop(this.ctx.currentTime + 0.08);
-      }
-      playCapture() {
-        if (this.muted) return;
-        this.init();
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(220, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.18);
-        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.start();
-        osc.stop(this.ctx.currentTime + 0.2);
-      }
-      playVictory() {
-        if (this.muted) return;
-        this.init();
-        const notes = [440, 554, 659, 880];
-        notes.forEach((freq, idx) => {
-          const osc = this.ctx.createOscillator();
-          const gain = this.ctx.createGain();
-          osc.type = 'sine';
-          osc.frequency.value = freq;
-          const start = this.ctx.currentTime + idx * 0.12;
-          gain.gain.setValueAtTime(0.2, start);
-          gain.gain.exponentialRampToValueAtTime(0.001, start + 0.4);
-          osc.connect(gain);
-          gain.connect(this.ctx.destination);
-          osc.start(start);
-          osc.stop(start + 0.4);
-        });
-      }
-      toggle() {
-        this.muted = !this.muted;
-        return !this.muted;
+        boardEl.appendChild(sq);
       }
     }
-    const audio = new SoundEngine();
-  </script>
+    statusEl.textContent = statusText(game);
+  }
 
-  <script>
-    // TYPES
-    const TYPES = {
-      ROCK: 'ROCK',
-      PAPER: 'PAPER',
-      SCISSORS: 'SCISSORS'
-    };
+  // --- playhtml "can-play" wiring ---
+  // IMPORTANT: this must be set *before* the playhtml script below runs.
+  wrapEl.defaultData = { fen: START_FEN, selected: null };
 
-    const SIDES = {
-      BLUE: 'BLUE',
-      RED: 'RED'
-    };
+  wrapEl.updateElement = ({ data }) => render(data);
 
-    // Icons & Labels Mapping
-    const PIECE_CONFIG = {
-      [TYPES.ROCK]: { icon: 'ph-hand-fist', symbol: '✊', nameVi: 'Búa' },
-      [TYPES.PAPER]: { icon: 'ph-hand', symbol: '✋', nameVi: 'Bao' },
-      [TYPES.SCISSORS]: { icon: 'ph-scissors', symbol: '✌️', nameVi: 'Kéo' }
-    };
-
-    // RPS Combat Hierarchy
-    // Rock beats Scissors; Scissors beats Paper; Paper beats Rock
-    function canBeat(attackerType, defenderType) {
-      if (attackerType === TYPES.ROCK && defenderType === TYPES.SCISSORS) return true;
-      if (attackerType === TYPES.SCISSORS && defenderType === TYPES.PAPER) return true;
-      if (attackerType === TYPES.PAPER && defenderType === TYPES.ROCK) return true;
-      return false;
+  wrapEl.onClick = (e, { data, setData }) => {
+    // Reset button, also inside this can-play element.
+    if (e.target.closest('[data-action="reset"]')) {
+      setData({ fen: START_FEN, selected: null });
+      return;
     }
 
-    // Home Base Tiles: Blue = A1 (row 0, col 0); Red = I9 (row 8, col 8)
-    const BASE_BLUE = { r: 0, c: 0 }; // A1
-    const BASE_RED = { r: 8, c: 8 };  // I9
+    const squareEl = e.target.closest(".square");
+    if (!squareEl) return;
+    const square = squareEl.dataset.square;
 
-    // Coordinates Helper (r: 0-8 is 1-9; c: 0-8 is A-I)
-    function toAlgebraic(r, c) {
-      const colLetter = String.fromCharCode(65 + c);
-      const rowNumber = r + 1;
-      return `${colLetter}${rowNumber}`;
+    const game = gameFromFen(data.fen);
+    if (game.game_over()) return;
+
+    // Nothing selected yet: select a piece belonging to the side to move.
+    if (!data.selected) {
+      const piece = game.get(square);
+      if (piece && piece.color === game.turn()) {
+        setData({ ...data, selected: square });
+      }
+      return;
     }
 
-    // In photo:
-    // Red cluster sits around upper-mid diagonal (rows 5 to 8, cols 3 to 7)
-    // Blue cluster sits around lower-mid diagonal (rows 1 to 4, cols 1 to 5)
-    function getInitialBoard() {
-      const board = Array(9).fill(null).map(() => Array(9).fill(null));
-
-      // --- BLUE CLUSTER (Lower diagonal grouping) ---
-      // Row 1 (index 1): D2 Paper, C2 Rock
-      // Row 2 (index 2): E3 Scissors, D3 Paper, C3 Rock
-      // Row 3 (index 3): D4 Scissors, C4 Paper, B4 Rock
-      // Row 4 (index 4): C5 Scissors, B5 Paper
-      const blueCluster = [
-        { r: 1, c: 3, type: TYPES.PAPER },    // D2
-        { r: 1, c: 2, type: TYPES.ROCK },     // C2
-        { r: 2, c: 4, type: TYPES.SCISSORS }, // E3
-        { r: 2, c: 3, type: TYPES.PAPER },    // D3
-        { r: 2, c: 2, type: TYPES.ROCK },     // C3
-        { r: 3, c: 3, type: TYPES.SCISSORS }, // D4
-        { r: 3, c: 2, type: TYPES.PAPER },    // C4
-        { r: 3, c: 1, type: TYPES.ROCK },     // B4
-        { r: 4, c: 2, type: TYPES.SCISSORS }  // C5
-      ];
-
-      // --- RED CLUSTER (Upper diagonal mirror grouping) ---
-      // Mirrors Blue's formation in the upper quadrant
-      const redCluster = [
-        { r: 7, c: 5, type: TYPES.PAPER },    // F8
-        { r: 7, c: 6, type: TYPES.ROCK },     // G8
-        { r: 6, c: 4, type: TYPES.SCISSORS }, // E7
-        { r: 6, c: 5, type: TYPES.PAPER },    // F7
-        { r: 6, c: 6, type: TYPES.ROCK },     // G7
-        { r: 5, c: 5, type: TYPES.SCISSORS }, // F6
-        { r: 5, c: 6, type: TYPES.PAPER },    // G6
-        { r: 5, c: 7, type: TYPES.ROCK },     // H6
-        { r: 4, c: 6, type: TYPES.SCISSORS }  // G5
-      ];
-
-      blueCluster.forEach((p, idx) => {
-        board[p.r][p.c] = { id: `B_${idx}`, side: SIDES.BLUE, type: p.type };
-      });
-
-      redCluster.forEach((p, idx) => {
-        board[p.r][p.c] = { id: `R_${idx}`, side: SIDES.RED, type: p.type };
-      });
-
-      return board;
-    }
-  </script>
-
-  <script>
-    class GameEngine {
-      constructor() {
-        this.board = getInitialBoard();
-        this.currentTurn = SIDES.BLUE;
-        this.selectedTile = null; // { r, c }
-        this.legalMoves = [];     // Array of { r, c, isCapture }
-        this.moveHistory = [];
-        this.capturedByBlue = [];
-        this.capturedByRed = [];
-        this.isGameOver = false;
-        this.turnNumber = 1;
-      }
-
-      reset() {
-        this.board = getInitialBoard();
-        this.currentTurn = SIDES.BLUE;
-        this.selectedTile = null;
-        this.legalMoves = [];
-        this.moveHistory = [];
-        this.capturedByBlue = [];
-        this.capturedByRed = [];
-        this.isGameOver = false;
-        this.turnNumber = 1;
-      }
-
-      saveState() {
-        return JSON.stringify({
-          board: this.board,
-          currentTurn: this.currentTurn,
-          capturedByBlue: this.capturedByBlue,
-          capturedByRed: this.capturedByRed,
-          turnNumber: this.turnNumber,
-          isGameOver: this.isGameOver
-        });
-      }
-
-      restoreState(stateStr) {
-        const data = JSON.parse(stateStr);
-        this.board = data.board;
-        this.currentTurn = data.currentTurn;
-        this.capturedByBlue = data.capturedByBlue;
-        this.capturedByRed = data.capturedByRed;
-        this.turnNumber = data.turnNumber;
-        this.isGameOver = data.isGameOver;
-        this.selectedTile = null;
-        this.legalMoves = [];
-      }
-
-      // Orthogonal step: Delta (+-1, 0) or (0, +-1)
-      getLegalMoves(r, c) {
-        const piece = this.board[r][c];
-        if (!piece || piece.side !== this.currentTurn || this.isGameOver) return [];
-
-        const deltas = [
-          { dr: 1, dc: 0 },  // Up (towards row 9)
-          { dr: -1, dc: 0 }, // Down (towards row 1)
-          { dr: 0, dc: -1 }, // Left
-          { dr: 0, dc: 1 }   // Right
-        ];
-
-        const valid = [];
-
-        deltas.forEach(({ dr, dc }) => {
-          const nr = r + dr;
-          const nc = c + dc;
-
-          // Check boundary within 9x9
-          if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) {
-            const dest = this.board[nr][nc];
-
-            if (!dest) {
-              // Empty space: always legal
-              valid.push({ r: nr, c: nc, isCapture: false });
-            } else if (dest.side !== piece.side) {
-              // Enemy piece: only legal if attacker beats defender
-              if (canBeat(piece.type, dest.type)) {
-                valid.push({ r: nr, c: nc, isCapture: true, targetPiece: dest });
-              }
-            }
-            // Cannot land on own pieces or enemy pieces of same/stronger type
-          }
-        });
-
-        return valid;
-      }
-
-      makeMove(fromR, fromC, toR, toC) {
-        if (this.isGameOver) return null;
-
-        const piece = this.board[fromR][fromC];
-        if (!piece) return null;
-
-        // Save snapshot for Undo
-        this.moveHistory.push(this.saveState());
-
-        const target = this.board[toR][toC];
-        let captured = null;
-
-        if (target) {
-          captured = target;
-          if (piece.side === SIDES.BLUE) {
-            this.capturedByBlue.push(target);
-          } else {
-            this.capturedByRed.push(target);
-          }
-        }
-
-        // Move piece
-        this.board[toR][toC] = piece;
-        this.board[fromR][fromC] = null;
-
-        // Check Victory Conditions
-        const winInfo = this.checkVictory(piece, toR, toC);
-
-        if (winInfo) {
-          this.isGameOver = true;
-          return { piece, from: { r: fromR, c: fromC }, to: { r: toR, c: toC }, captured, winInfo };
-        }
-
-        // Switch Turn
-        this.currentTurn = (this.currentTurn === SIDES.BLUE) ? SIDES.RED : SIDES.BLUE;
-        this.turnNumber++;
-        this.selectedTile = null;
-        this.legalMoves = [];
-
-        return { piece, from: { r: fromR, c: fromC }, to: { r: toR, c: toC }, captured, winInfo: null };
-      }
-
-      checkVictory(lastMovedPiece, r, c) {
-        // Condition 1: Base Infiltration
-        if (lastMovedPiece.side === SIDES.BLUE && r === BASE_RED.r && c === BASE_RED.c) {
-          return {
-            winner: SIDES.BLUE,
-            reason: `Quân Xanh đã đột kích thành công Căn Cứ Đỏ (I9)!`
-          };
-        }
-        if (lastMovedPiece.side === SIDES.RED && r === BASE_BLUE.r && c === BASE_BLUE.c) {
-          return {
-            winner: SIDES.RED,
-            reason: `Quân Đỏ đã đột kích thành công Căn Cứ Xanh (A1)!`
-          };
-        }
-
-        // Condition 2: Total Annihilation
-        const blueCount = this.countPieces(SIDES.BLUE);
-        const redCount = this.countPieces(SIDES.RED);
-
-        if (redCount === 0) {
-          return {
-            winner: SIDES.BLUE,
-            reason: `Quân Xanh đã tiêu diệt toàn bộ quân Đội Đỏ!`
-          };
-        }
-        if (blueCount === 0) {
-          return {
-            winner: SIDES.RED,
-            reason: `Quân Đỏ đã tiêu diệt toàn bộ quân Đội Xanh!`
-          };
-        }
-
-        return null;
-      }
-
-      countPieces(side) {
-        let count = 0;
-        for (let r = 0; r < 9; r++) {
-          for (let c = 0; c < 9; c++) {
-            if (this.board[r][c] && this.board[r][c].side === side) {
-              count++;
-            }
-          }
-        }
-        return count;
-      }
-
-      undo() {
-        if (this.moveHistory.length === 0) return false;
-        const prevState = this.moveHistory.pop();
-        this.restoreState(prevState);
-        return true;
-      }
-    }
-  </script>
-
-  <script>
-    const game = new GameEngine();
-
-    // DOM Elements
-    const boardEl = document.getElementById('board');
-    const turnBannerEl = document.getElementById('turn-banner');
-    const cardBlueEl = document.getElementById('card-blue');
-    const cardRedEl = document.getElementById('card-red');
-    const blueAliveCount = document.getElementById('blue-alive-count');
-    const redAliveCount = document.getElementById('red-alive-count');
-    const blueGraveyard = document.getElementById('blue-graveyard');
-    const redGraveyard = document.getElementById('red-graveyard');
-    const blueBadge = document.getElementById('blue-turn-badge');
-    const redBadge = document.getElementById('red-turn-badge');
-    const logBox = document.getElementById('log-box');
-    const turnCounterEl = document.getElementById('turn-counter');
-    const victoryModal = document.getElementById('victory-modal');
-    const victoryTitle = document.getElementById('victory-title');
-    const victoryReason = document.getElementById('victory-reason');
-    const victoryBadge = document.getElementById('victory-badge');
-    const floatingMsg = document.getElementById('floating-msg');
-
-    // Help Modal
-    const helpModal = document.getElementById('help-modal');
-    document.getElementById('btn-help').onclick = () => helpModal.classList.remove('hidden');
-    document.getElementById('btn-close-help').onclick = () => helpModal.classList.add('hidden');
-    document.getElementById('btn-understood').onclick = () => helpModal.classList.add('hidden');
-
-    // Sound toggle
-    document.getElementById('btn-sound').onclick = () => {
-      const active = audio.toggle();
-      const icon = document.getElementById('sound-icon');
-      if (active) {
-        icon.className = "ph-bold ph-speaker-high";
-      } else {
-        icon.className = "ph-bold ph-speaker-slash text-rose-400";
-      }
-    };
-
-    // Restart buttons
-    document.getElementById('btn-restart').onclick = restartGame;
-    document.getElementById('modal-btn-restart').onclick = () => {
-      victoryModal.classList.add('hidden');
-      restartGame();
-    };
-
-    // Undo button
-    document.getElementById('btn-undo').onclick = () => {
-      if (game.undo()) {
-        audio.playMove();
-        render();
-        logMessage(`[Đi lại] Đã hoàn tác lại 1 nước.`);
-      }
-    };
-
-    function restartGame() {
-      game.reset();
-      victoryModal.classList.add('hidden');
-      logBox.innerHTML = '<div class="text-slate-500 italic">Trò chơi bắt đầu. Quân Xanh đi trước!</div>';
-      render();
+    // Clicking the same square deselects.
+    if (square === data.selected) {
+      setData({ ...data, selected: null });
+      return;
     }
 
-    function logMessage(msg) {
-      const line = document.createElement('div');
-      line.innerHTML = msg;
-      logBox.appendChild(line);
-      logBox.scrollTop = logBox.scrollHeight;
+    // Try to make the move (auto-queen on promotion, kept minimal).
+    const move = game.move({ from: data.selected, to: square, promotion: "q" });
+    if (move) {
+      setData({ fen: game.fen(), selected: null });
+      return;
     }
 
-    function triggerParticleEffect(x, y, color = '#38bdf8') {
-      for (let i = 0; i < 12; i++) {
-        const p = document.createElement('div');
-        p.className = 'particle';
-        const size = Math.random() * 8 + 4;
-        p.style.width = `${size}px`;
-        p.style.height = `${size}px`;
-        p.style.backgroundColor = color;
-        p.style.left = `${x}px`;
-        p.style.top = `${y}px`;
-        
-        const angle = Math.random() * Math.PI * 2;
-        const dist = Math.random() * 60 + 20;
-        p.style.setProperty('--tx', `${Math.cos(angle) * dist}px`);
-        p.style.setProperty('--ty', `${Math.sin(angle) * dist}px`);
-
-        document.body.appendChild(p);
-        setTimeout(() => p.remove(), 600);
-      }
+    // Illegal target: if it's another of the mover's own pieces, re-select it.
+    const piece = game.get(square);
+    if (piece && piece.color === game.turn()) {
+      setData({ ...data, selected: square });
+    } else {
+      setData({ ...data, selected: null });
     }
+  };
+</script>
 
-    function render() {
-      // 1. Render Tiles & Pieces
-      boardEl.innerHTML = '';
+<!-- playhtml: syncs and persists the board's data across everyone viewing this page -->
+<script type="module">
+  import { playhtml } from "https://unpkg.com/playhtml@latest";
+  playhtml.init();
+</script>
 
-      // We render rows from 8 down to 0 so Row 9 is at top, Row 1 at bottom (standard chess convention)
-      for (let r = 8; r >= 0; r--) {
-        for (let c = 0; c < 9; c++) {
-          const tile = document.createElement('div');
-          const isDark = (r + c) % 2 === 1;
-          
-          let tileClasses = `relative flex items-center justify-center transition-all duration-150 rounded-lg cursor-pointer ${isDark ? 'tile-dark' : 'tile-light'}`;
-          
-          // Check Base squares
-          if (r === BASE_BLUE.r && c === BASE_BLUE.c) {
-            tileClasses += ' tile-blue-base';
-          } else if (r === BASE_RED.r && c === BASE_RED.c) {
-            tileClasses += ' tile-red-base';
-          }
-
-          tile.className = tileClasses;
-          tile.dataset.r = r;
-          tile.dataset.c = c;
-
-          // Render Base Label if empty
-          if (r === BASE_BLUE.r && c === BASE_BLUE.c && !game.board[r][c]) {
-            tile.innerHTML = `<span class="text-[9px] font-mono font-bold text-sky-400/80 pointer-events-none">BASE A1</span>`;
-          } else if (r === BASE_RED.r && c === BASE_RED.c && !game.board[r][c]) {
-            tile.innerHTML = `<span class="text-[9px] font-mono font-bold text-pink-400/80 pointer-events-none">BASE I9</span>`;
-          }
-
-          const piece = game.board[r][c];
-
-          // Is this tile selected?
-          const isSelected = game.selectedTile && game.selectedTile.r === r && game.selectedTile.c === c;
-
-          if (piece) {
-            const pieceEl = document.createElement('div');
-            const isBlue = piece.side === SIDES.BLUE;
-            const config = PIECE_CONFIG[piece.type];
-
-            pieceEl.className = `w-[82%] h-[82%] rounded-full flex flex-col items-center justify-center font-bold transition-transform cursor-pointer shadow-md select-none ${
-              isBlue ? 'token-blue' : 'token-red'
-            } ${isSelected ? 'token-selected' : 'hover:scale-105'}`;
-
-            // Piece Icon & Vietnamese Label
-            pieceEl.innerHTML = `
-              <i class="ph-bold ${config.icon} text-lg sm:text-2xl leading-none"></i>
-              <span class="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-tight mt-0.5">${config.nameVi}</span>
-            `;
-
-            tile.appendChild(pieceEl);
-          }
-
-          // Check if this tile is a legal move target
-          const legalMove = game.legalMoves.find(m => m.r === r && m.c === c);
-          if (legalMove) {
-            if (legalMove.isCapture) {
-              const captureRing = document.createElement('div');
-              captureRing.className = 'absolute capture-target-ring flex items-center justify-center pointer-events-none';
-              tile.appendChild(captureRing);
-            } else {
-              const dot = document.createElement('div');
-              dot.className = 'move-target-dot pointer-events-none';
-              tile.appendChild(dot);
-            }
-          }
-
-          // Tile click handler
-          tile.onclick = (e) => onTileClick(r, c, e);
-
-          boardEl.appendChild(tile);
-        }
-      }
-
-      // 2. Update Turn Banner & Badges
-      const isBlueTurn = game.currentTurn === SIDES.BLUE;
-      turnCounterEl.innerText = `Lượt: #${game.turnNumber}`;
-
-      if (isBlueTurn) {
-        turnBannerEl.className = "mb-3 px-6 py-2 rounded-full font-extrabold text-sm flex items-center gap-2 shadow-lg bg-sky-500/20 text-sky-300 border border-sky-500 turn-glow-blue";
-        turnBannerEl.innerHTML = `<span class="w-3 h-3 rounded-full bg-sky-400 animate-ping"></span> LƯỢT QUÂN XANH (Blue)`;
-        cardBlueEl.classList.add('turn-glow-blue');
-        cardRedEl.classList.remove('turn-glow-red');
-        blueBadge.classList.remove('hidden');
-        redBadge.classList.add('hidden');
-      } else {
-        turnBannerEl.className = "mb-3 px-6 py-2 rounded-full font-extrabold text-sm flex items-center gap-2 shadow-lg bg-pink-500/20 text-pink-300 border border-pink-500 turn-glow-red";
-        turnBannerEl.innerHTML = `<span class="w-3 h-3 rounded-full bg-pink-400 animate-ping"></span> LƯỢT QUÂN ĐỎ (Red)`;
-        cardRedEl.classList.add('turn-glow-red');
-        cardBlueEl.classList.remove('turn-glow-blue');
-        redBadge.classList.remove('hidden');
-        blueBadge.classList.add('hidden');
-      }
-
-      // 3. Update Counts and Captured Graves
-      blueAliveCount.innerText = game.countPieces(SIDES.BLUE);
-      redAliveCount.innerText = game.countPieces(SIDES.RED);
-
-      renderGraveyard(blueGraveyard, game.capturedByBlue, 'token-red');
-      renderGraveyard(redGraveyard, game.capturedByRed, 'token-blue');
-    }
-
-    function renderGraveyard(container, capturedList, styleClass) {
-      if (capturedList.length === 0) {
-        container.innerHTML = `<span class="text-xs text-slate-500 italic">Chưa ăn quân nào</span>`;
-        return;
-      }
-      container.innerHTML = '';
-      capturedList.forEach(p => {
-        const item = document.createElement('div');
-        const cfg = PIECE_CONFIG[p.type];
-        item.className = `w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${styleClass} shadow`;
-        item.title = `${p.side === SIDES.BLUE ? 'Xanh' : 'Đỏ'} ${cfg.nameVi}`;
-        item.innerHTML = `<i class="ph-bold ${cfg.icon}"></i>`;
-        container.appendChild(item);
-      });
-    }
-
-    function onTileClick(r, c, event) {
-      if (game.isGameOver) return;
-
-      const piece = game.board[r][c];
-
-      // If already selected a piece, check if click is on legal target
-      if (game.selectedTile) {
-        const moveTarget = game.legalMoves.find(m => m.r === r && m.c === c);
-
-        if (moveTarget) {
-          // Execute Move
-          const fromR = game.selectedTile.r;
-          const fromC = game.selectedTile.c;
-          const movedPiece = game.board[fromR][fromC];
-
-          const res = game.makeMove(fromR, fromC, r, c);
-          if (res) {
-            const fromAlg = toAlgebraic(fromR, fromC);
-            const toAlg = toAlgebraic(r, c);
-            const pieceName = PIECE_CONFIG[movedPiece.type].nameVi;
-
-            if (res.captured) {
-              audio.playCapture();
-              const capName = PIECE_CONFIG[res.captured.type].nameVi;
-              logMessage(`<span class="${res.piece.side === SIDES.BLUE ? 'text-sky-400' : 'text-pink-400'} font-bold">${res.piece.side === SIDES.BLUE ? 'Xanh' : 'Đỏ'}</span>: ${pieceName} (${fromAlg}) ⚔️ ăn ${capName} (${toAlg})`);
-              
-              // Visual particle burst
-              const rect = event.target.getBoundingClientRect();
-              triggerParticleEffect(rect.left + rect.width / 2, rect.top + rect.height / 2, res.piece.side === SIDES.BLUE ? '#38bdf8' : '#f43f5e');
-            } else {
-              audio.playMove();
-              logMessage(`<span class="${res.piece.side === SIDES.BLUE ? 'text-sky-400' : 'text-pink-400'}">${res.piece.side === SIDES.BLUE ? 'Xanh' : 'Đỏ'}</span>: ${pieceName} từ ${fromAlg} ➔ ${toAlg}`);
-            }
-
-            if (res.winInfo) {
-              handleVictory(res.winInfo);
-            }
-          }
-
-          render();
-          return;
-        }
-      }
-
-      // If clicked on own piece: Select and calculate valid moves
-      if (piece && piece.side === game.currentTurn) {
-        audio.init();
-        if (game.selectedTile && game.selectedTile.r === r && game.selectedTile.c === c) {
-          // Deselect
-          game.selectedTile = null;
-          game.legalMoves = [];
-        } else {
-          game.selectedTile = { r, c };
-          game.legalMoves = game.getLegalMoves(r, c);
-        }
-        render();
-      } else {
-        // Clicked invalid tile/enemy piece without active valid move
-        if (game.selectedTile) {
-          game.selectedTile = null;
-          game.legalMoves = [];
-          render();
-        }
-      }
-    }
-
-    function handleVictory(winInfo) {
-      audio.playVictory();
-      const isBlue = winInfo.winner === SIDES.BLUE;
-
-      victoryTitle.innerText = isBlue ? 'QUÂN XANH THẮNG TRẬN!' : 'QUÂN ĐỎ THẮNG TRẬN!';
-      victoryTitle.className = `text-2xl sm:text-3xl font-black mb-2 ${isBlue ? 'text-sky-400' : 'text-pink-400'}`;
-      victoryReason.innerText = winInfo.reason;
-
-      victoryBadge.className = `w-20 h-20 mx-auto rounded-full flex items-center justify-center text-4xl mb-4 shadow-xl ${
-        isBlue ? 'bg-sky-500/20 text-sky-400 border-2 border-sky-400' : 'bg-pink-500/20 text-pink-400 border-2 border-pink-400'
-      }`;
-
-      victoryModal.classList.remove('hidden');
-    }
-
-    // Initial load
-    window.onload = () => {
-      render();
-    };
-  </script>
 </body>
 </html>
