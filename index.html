@@ -1,203 +1,1259 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>2-Player Chess (playhtml)</title>
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cờ Kéo Búa Bao - RPS Tactical Arena (playhtml Cloud)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap");
 
-<!-- chess.js: move generation/validation + game state (classic global build) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-
-<style>
-  body {
-    font-family: system-ui, sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin: 0;
-    padding: 2rem 1rem;
-    background: #f4f1ea;
-    color: #2b2b2b;
-  }
-  h1 { margin-bottom: 0.25rem; }
-  #status {
-    font-size: 1.1rem;
-    margin-bottom: 1rem;
-    min-height: 1.5em;
-    font-weight: 600;
-  }
-  #board {
-    display: grid;
-    grid-template-columns: repeat(8, min(11vw, 60px));
-    grid-template-rows: repeat(8, min(11vw, 60px));
-    border: 4px solid #3b2f2f;
-    user-select: none;
-    cursor: pointer;
-  }
-  .square {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: min(8vw, 42px);
-    line-height: 1;
-  }
-  .light { background: #eeeed2; }
-  .dark  { background: #769656; }
-  .selected { outline: 4px solid #f7d51d; outline-offset: -4px; }
-  .legal::after {
-    content: "";
-    display: block;
-    width: 22%;
-    height: 22%;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.25);
-  }
-  #reset {
-    margin-top: 1rem;
-    padding: 0.5rem 1rem;
-    font-size: 0.9rem;
-    cursor: pointer;
-    border-radius: 6px;
-    border: 1px solid #3b2f2f;
-    background: white;
-  }
-  p.hint { max-width: 480px; text-align: center; color: #555; font-size: 0.9rem; }
-</style>
-</head>
-<body>
-
-<h1>♟️ 2-Player Chess</h1>
-<p class="hint">
-  Share this page's URL with your opponent — anyone who opens it joins the same
-  game. It's White's move first; click a piece, then click a square to move it.
-  Only the side whose turn it is can move.
-</p>
-
-<div id="status"></div>
-
-<!-- can-play turns this wrapper into a synced, collaborative element via playhtml.
-     The board grid and the reset button both live inside it so both can use
-     the same onClick/setData wiring. -->
-<div id="board-wrap" can-play>
-  <div id="board"></div>
-  <button id="reset" data-action="reset">Reset game</button>
-</div>
-
-<script>
-  const wrapEl = document.getElementById("board-wrap");
-  const boardEl = document.getElementById("board");
-  const statusEl = document.getElementById("status");
-
-  const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
-  const START_FEN = "start"; // chess.js accepts "start" as shorthand
-
-  const PIECE_UNICODE = {
-    wp: "♙", wn: "♘", wb: "♗", wr: "♖", wq: "♕", wk: "♔",
-    bp: "♟", bn: "♞", bb: "♝", br: "♜", bq: "♛", bk: "♚",
-  };
-
-  function gameFromFen(fen) {
-    const game = new Chess();
-    if (fen && fen !== START_FEN) game.load(fen);
-    return game;
-  }
-
-  function statusText(game) {
-    if (game.in_checkmate()) {
-      return `Checkmate — ${game.turn() === "w" ? "Black" : "White"} wins! (click "Reset game" to play again)`;
-    }
-    if (game.in_draw() || game.in_stalemate() || game.in_threefold_repetition()) {
-      return "Draw.";
-    }
-    const side = game.turn() === "w" ? "White" : "Black";
-    return game.in_check() ? `${side} to move — check!` : `${side} to move`;
-  }
-
-  // Renders the DOM from the shared data. Called on load and whenever
-  // the synced data changes (locally or from the other player).
-  function render(data) {
-    const game = gameFromFen(data.fen);
-    const legalTargets = data.selected
-      ? game.moves({ square: data.selected, verbose: true }).map((m) => m.to)
-      : [];
-
-    boardEl.innerHTML = "";
-    for (let rank = 8; rank >= 1; rank--) {
-      for (let fileIdx = 0; fileIdx < 8; fileIdx++) {
-        const square = FILES[fileIdx] + rank;
-        const sq = document.createElement("div");
-        sq.dataset.square = square;
-        sq.className =
-          "square " + ((fileIdx + rank) % 2 === 0 ? "dark" : "light");
-        if (square === data.selected) sq.classList.add("selected");
-        if (legalTargets.includes(square)) sq.classList.add("legal");
-
-        const piece = game.get(square);
-        if (piece) sq.textContent = PIECE_UNICODE[piece.color + piece.type];
-
-        boardEl.appendChild(sq);
+      * {
+        box-sizing: border-box;
+        user-select: none;
+        -webkit-user-select: none;
       }
-    }
-    statusEl.textContent = statusText(game);
-  }
 
-  // --- playhtml "can-play" wiring ---
-  // IMPORTANT: this must be set *before* the playhtml script below runs.
-  wrapEl.defaultData = { fen: START_FEN, selected: null };
-
-  wrapEl.updateElement = ({ data }) => render(data);
-
-  wrapEl.onClick = (e, { data, setData }) => {
-    // Reset button, also inside this can-play element.
-    if (e.target.closest('[data-action="reset"]')) {
-      setData({ fen: START_FEN, selected: null });
-      return;
-    }
-
-    const squareEl = e.target.closest(".square");
-    if (!squareEl) return;
-    const square = squareEl.dataset.square;
-
-    const game = gameFromFen(data.fen);
-    if (game.game_over()) return;
-
-    // Nothing selected yet: select a piece belonging to the side to move.
-    if (!data.selected) {
-      const piece = game.get(square);
-      if (piece && piece.color === game.turn()) {
-        setData({ ...data, selected: square });
+      body {
+        font-family: "Plus Jakarta Sans", sans-serif;
+        background: radial-gradient(circle at 50% 20%, #1e293b, #0f172a 80%);
+        color: #f1f5f9;
+        min-height: 100vh;
       }
-      return;
-    }
 
-    // Clicking the same square deselects.
-    if (square === data.selected) {
-      setData({ ...data, selected: null });
-      return;
-    }
+      .font-mono {
+        font-family: "JetBrains Mono", monospace;
+      }
 
-    // Try to make the move (auto-queen on promotion, kept minimal).
-    const move = game.move({ from: data.selected, to: square, promotion: "q" });
-    if (move) {
-      setData({ fen: game.fen(), selected: null });
-      return;
-    }
+      /* Board Tile Colors */
+      .tile-light {
+        background-color: #334155;
+      }
+      .tile-dark {
+        background-color: #1e293b;
+      }
+      .tile-blue-base {
+        background-color: rgba(14, 165, 233, 0.35) !important;
+        border: 2px dashed rgba(56, 189, 248, 0.8) !important;
+      }
+      .tile-red-base {
+        background-color: rgba(244, 63, 94, 0.35) !important;
+        border: 2px dashed rgba(251, 113, 133, 0.8) !important;
+      }
 
-    // Illegal target: if it's another of the mover's own pieces, re-select it.
-    const piece = game.get(square);
-    if (piece && piece.color === game.turn()) {
-      setData({ ...data, selected: square });
-    } else {
-      setData({ ...data, selected: null });
-    }
-  };
-</script>
+      /* Pulse effect on turn */
+      .turn-glow-blue {
+        box-shadow: 0 0 25px rgba(56, 189, 248, 0.5);
+        border-color: rgba(56, 189, 248, 0.8);
+      }
+      .turn-glow-red {
+        box-shadow: 0 0 25px rgba(244, 63, 94, 0.5);
+        border-color: rgba(251, 113, 133, 0.8);
+      }
 
-<!-- playhtml: syncs and persists the board's data across everyone viewing this page -->
-<script type="module">
-  import { playhtml } from "https://unpkg.com/playhtml@latest";
-  playhtml.init();
-</script>
+      /* Token styling matching photo circular pastel badges */
+      .token-blue {
+        background: linear-gradient(
+          135deg,
+          #7dd3fc 0%,
+          #38bdf8 60%,
+          #0284c7 100%
+        );
+        border: 3px solid #e0f2fe;
+        box-shadow: 0 4px 10px rgba(2, 132, 199, 0.45);
+        color: #034f75;
+      }
+      .token-red {
+        background: linear-gradient(
+          135deg,
+          #fbcfe8 0%,
+          #f472b6 60%,
+          #db2777 100%
+        );
+        border: 3px solid #fdf2f8;
+        box-shadow: 0 4px 10px rgba(219, 39, 119, 0.45);
+        color: #700c3b;
+      }
 
-</body>
+      .token-selected {
+        transform: scale(1.15);
+        z-index: 30;
+        animation: floatSelected 1.2s ease-in-out infinite alternate;
+      }
+
+      @keyframes floatSelected {
+        0% {
+          transform: scale(1.15) translateY(0);
+          filter: drop-shadow(0 0 12px #facc15);
+        }
+        100% {
+          transform: scale(1.15) translateY(-4px);
+          filter: drop-shadow(0 0 20px #fde047);
+        }
+      }
+
+      /* Move Indicators */
+      .move-target-dot {
+        width: 32%;
+        height: 32%;
+        background: rgba(74, 222, 128, 0.85);
+        border-radius: 50%;
+        box-shadow: 0 0 10px rgba(74, 222, 128, 0.9);
+        animation: pulseDot 1s infinite alternate;
+      }
+
+      .capture-target-ring {
+        width: 85%;
+        height: 85%;
+        border: 3px dashed #ef4444;
+        border-radius: 50%;
+        background: rgba(239, 68, 68, 0.25);
+        animation: spinRing 5s linear infinite;
+      }
+
+      @keyframes pulseDot {
+        from {
+          transform: scale(0.8);
+          opacity: 0.7;
+        }
+        to {
+          transform: scale(1.2);
+          opacity: 1;
+        }
+      }
+      @keyframes spinRing {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Particle Explosion effect */
+      .particle {
+        position: absolute;
+        pointer-events: none;
+        border-radius: 50%;
+        animation: explode 0.6s ease-out forwards;
+      }
+      @keyframes explode {
+        0% {
+          transform: translate(0, 0) scale(1);
+          opacity: 1;
+        }
+        100% {
+          transform: translate(var(--tx), var(--ty)) scale(0);
+          opacity: 0;
+        }
+      }
+
+      /* Loading Spinner */
+      .spinner {
+        width: 28px;
+        height: 28px;
+        border: 3px solid #334155;
+        border-top-color: #38bdf8;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body
+    class="p-2 sm:p-4 md:p-6 flex flex-col items-center justify-between min-h-screen"
+  >
+    <!-- Top Navigation Bar -->
+    <header
+      class="w-full max-w-6xl flex flex-wrap items-center justify-between gap-4 mb-3 px-3 py-2 bg-slate-800/80 backdrop-blur rounded-2xl border border-slate-700 shadow-xl"
+    >
+      <div class="flex items-center gap-3">
+        <div
+          class="p-2 bg-gradient-to-tr from-sky-500 to-pink-500 rounded-xl text-white shadow-lg"
+        >
+          <i class="ph-bold ph-sword text-2xl"></i>
+        </div>
+        <div>
+          <h1
+            class="text-xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-sky-400 via-white to-pink-400"
+          >
+            CỜ KÉO BÚA BAO CHIẾN THUẬT
+          </h1>
+          <p class="text-xs text-slate-400">
+            9x9 RPS Tactical Chess Arena (playhtml Cloud Lobby)
+          </p>
+        </div>
+      </div>
+
+      <!-- Quick Rules Legend -->
+      <div
+        class="hidden md:flex items-center gap-3 px-4 py-1.5 bg-slate-900/60 rounded-xl border border-slate-700/80 text-xs"
+      >
+        <span class="flex items-center gap-1 text-slate-300 font-semibold"
+          ><i class="ph-bold ph-hand-fist text-amber-400"></i> Búa đập</span
+        >
+        <span class="text-slate-500">&gt;</span>
+        <span class="flex items-center gap-1 text-slate-300 font-semibold"
+          ><i class="ph-bold ph-scissors text-emerald-400"></i> Kéo cắt</span
+        >
+        <span class="text-slate-500">&gt;</span>
+        <span class="flex items-center gap-1 text-slate-300 font-semibold"
+          ><i class="ph-bold ph-hand text-sky-400"></i> Bao bọc</span
+        >
+        <span class="text-slate-500">&gt;</span>
+        <span class="text-slate-400">Búa</span>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-2">
+        <button
+          id="btn-sound"
+          class="p-2 rounded-xl bg-slate-700 hover:bg-slate-600 transition text-slate-200 text-lg"
+          title="Bật/Tắt âm thanh"
+        >
+          <i class="ph-bold ph-speaker-high" id="sound-icon"></i>
+        </button>
+        <button
+          id="btn-help"
+          class="p-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-300 text-lg"
+          title="Hướng dẫn luật chơi"
+        >
+          <i class="ph-bold ph-info"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- ==================== LOBBY GHÉP TRẬN CHUNG (TỰ ĐỘNG THEO PLAYHTML) ==================== -->
+    <div id="lobby" can-play class="w-full max-w-md my-auto">
+      <div
+        id="lobby-panel"
+        class="flex flex-col items-center gap-4 p-8 bg-slate-900 border border-slate-700 rounded-3xl text-center shadow-2xl"
+      >
+        <div
+          class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-sky-500 to-pink-500 flex items-center justify-center text-3xl text-white shadow-lg"
+        >
+          <i class="ph-bold ph-users-three"></i>
+        </div>
+        <div>
+          <h2 class="text-xl font-bold text-white mb-1">Ghép Đấu 2 Người</h2>
+          <p id="lobby-message" class="text-xs text-slate-400 max-w-xs">
+            Đang tải trạng thái phòng...
+          </p>
+        </div>
+
+        <button
+          id="join-btn"
+          data-action="join"
+          style="display: none"
+          class="px-6 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg transition"
+        >
+          Tham Gia Trận Đấu
+        </button>
+
+        <div id="lobby-spinner" class="spinner" style="display: none"></div>
+      </div>
+    </div>
+
+    <!-- ==================== KHU VỰC BÀN CỜ ĐẦY ĐỦ 3 CỘT ==================== -->
+    <main
+      id="game-container"
+      style="display: none"
+      class="w-full max-w-6xl"
+    ></main>
+
+    <!-- ==================== VICTORY MODAL ==================== -->
+    <div
+      id="victory-modal"
+      class="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 hidden"
+    >
+      <div
+        class="bg-slate-900 border-2 border-slate-700 p-6 sm:p-8 rounded-3xl max-w-md w-full text-center shadow-2xl relative"
+      >
+        <div
+          id="victory-badge"
+          class="w-20 h-20 mx-auto rounded-full flex items-center justify-center text-4xl mb-4 shadow-xl"
+        >
+          <i class="ph-bold ph-crown"></i>
+        </div>
+        <h2 id="victory-title" class="text-2xl sm:text-3xl font-black mb-2">
+          CHIẾN THẮNG!
+        </h2>
+        <p
+          id="victory-reason"
+          class="text-sm text-slate-300 mb-6 leading-relaxed"
+        ></p>
+
+        <div class="flex gap-3 justify-center">
+          <button
+            id="modal-btn-close"
+            class="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl shadow-lg transition"
+          >
+            Xem lại bàn cờ
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== HELP MODAL ==================== -->
+    <div
+      id="help-modal"
+      class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden"
+    >
+      <div
+        class="bg-slate-900 border border-slate-700 p-6 rounded-3xl max-w-lg w-full shadow-2xl text-left"
+      >
+        <div
+          class="flex items-center justify-between pb-3 border-b border-slate-800"
+        >
+          <h3 class="text-lg font-bold text-white flex items-center gap-2">
+            <i class="ph-bold ph-book-open text-sky-400"></i> Luật Chơi Cờ Kéo
+            Búa Bao
+          </h3>
+          <button
+            id="btn-close-help"
+            class="text-slate-400 hover:text-white text-lg"
+          >
+            <i class="ph-bold ph-x"></i>
+          </button>
+        </div>
+        <div class="py-4 space-y-3 text-sm text-slate-300">
+          <p>
+            <strong>1. Bàn cờ & Quân cờ:</strong> Bàn cờ 9x9 ô. Mỗi bên có 9
+            quân xếp thành hình cụm tam giác chéo tương ứng như trong hình chụp:
+          </p>
+          <div class="grid grid-cols-3 gap-2 py-2 text-center text-xs">
+            <div class="p-2 rounded-xl bg-slate-800 border border-slate-700">
+              <span class="text-lg">✊</span><br /><strong>BÚA (Rock)</strong
+              ><br /><span class="text-slate-400">Thắng Kéo</span>
+            </div>
+            <div class="p-2 rounded-xl bg-slate-800 border border-slate-700">
+              <span class="text-lg">✌️</span><br /><strong
+                >KÉO (Scissors)</strong
+              ><br /><span class="text-slate-400">Thắng Bao</span>
+            </div>
+            <div class="p-2 rounded-xl bg-slate-800 border border-slate-700">
+              <span class="text-lg">✋</span><br /><strong>BAO (Paper)</strong
+              ><br /><span class="text-slate-400">Thắng Búa</span>
+            </div>
+          </div>
+          <p>
+            <strong>2. Di chuyển:</strong> Mỗi lượt, bạn được chọn 1 quân của
+            mình di chuyển <strong>1 ô theo chiều dọc hoặc ngang</strong> (trên,
+            dưới, trái, phải) vào ô trống hoặc ô có quân đối thủ.
+          </p>
+          <p>
+            <strong>3. Tấn công (Ăn quân):</strong> Bạn chỉ có thể tiến vào ô
+            của quân địch nếu loại quân của bạn <em>khắc chế</em> quân địch theo
+            quy tắc Kéo-Búa-Bao. Quân cùng loại hoặc quân thua không thể tấn
+            công.
+          </p>
+          <p>
+            <strong>4. Điều kiện thắng:</strong> Đột kích thành công ô Căn cứ
+            đối phương (<strong class="text-pink-400">I9</strong> của Đỏ,
+            <strong class="text-sky-400">A1</strong> của Xanh), hoặc tiêu diệt
+            toàn bộ 9 quân của đối phương.
+          </p>
+        </div>
+        <div class="pt-2 text-right">
+          <button
+            id="btn-understood"
+            class="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded-xl text-white font-bold text-xs"
+          >
+            Đã hiểu
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== HỆ THỐNG ÂM THANH WEB AUDIO API ==================== -->
+    <script>
+      class SoundEngine {
+        constructor() {
+          this.ctx = null;
+          this.muted = false;
+        }
+        init() {
+          if (!this.ctx) {
+            const AudioContext =
+              window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioContext();
+          }
+        }
+        playMove() {
+          if (this.muted) return;
+          this.init();
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(320, this.ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(
+            540,
+            this.ctx.currentTime + 0.08,
+          );
+          gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(
+            0.01,
+            this.ctx.currentTime + 0.08,
+          );
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.08);
+        }
+        playCapture() {
+          if (this.muted) return;
+          this.init();
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = "triangle";
+          osc.frequency.setValueAtTime(220, this.ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(
+            880,
+            this.ctx.currentTime + 0.18,
+          );
+          gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(
+            0.01,
+            this.ctx.currentTime + 0.2,
+          );
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.2);
+        }
+        playVictory() {
+          if (this.muted) return;
+          this.init();
+          const notes = [440, 554, 659, 880];
+          notes.forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.value = freq;
+            const start = this.ctx.currentTime + idx * 0.12;
+            gain.gain.setValueAtTime(0.2, start);
+            gain.gain.exponentialRampToValueAtTime(0.001, start + 0.4);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(start);
+            osc.stop(start + 0.4);
+          });
+        }
+        toggle() {
+          this.muted = !this.muted;
+          return !this.muted;
+        }
+      }
+      const audio = new SoundEngine();
+
+      document.getElementById("btn-sound").onclick = () => {
+        const active = audio.toggle();
+        const icon = document.getElementById("sound-icon");
+        icon.className = active
+          ? "ph-bold ph-speaker-high"
+          : "ph-bold ph-speaker-slash text-rose-400";
+      };
+
+      const helpModal = document.getElementById("help-modal");
+      document.getElementById("btn-help").onclick = () =>
+        helpModal.classList.remove("hidden");
+      document.getElementById("btn-close-help").onclick = () =>
+        helpModal.classList.add("hidden");
+      document.getElementById("btn-understood").onclick = () =>
+        helpModal.classList.add("hidden");
+
+      const victoryModal = document.getElementById("victory-modal");
+      document.getElementById("modal-btn-close").onclick = () =>
+        victoryModal.classList.add("hidden");
+
+      function triggerParticleEffect(x, y, color = "#38bdf8") {
+        for (let i = 0; i < 12; i++) {
+          const p = document.createElement("div");
+          p.className = "particle";
+          const size = Math.random() * 8 + 4;
+          p.style.width = `${size}px`;
+          p.style.height = `${size}px`;
+          p.style.backgroundColor = color;
+          p.style.left = `${x}px`;
+          p.style.top = `${y}px`;
+          const angle = Math.random() * Math.PI * 2;
+          const dist = Math.random() * 60 + 20;
+          p.style.setProperty("--tx", `${Math.cos(angle) * dist}px`);
+          p.style.setProperty("--ty", `${Math.sin(angle) * dist}px`);
+          document.body.appendChild(p);
+          setTimeout(() => p.remove(), 600);
+        }
+      }
+    </script>
+
+    <!-- ==================== LOGIC GAME & MATCHMAKING LOBBY ==================== -->
+    <script>
+      const TYPES = { ROCK: "ROCK", PAPER: "PAPER", SCISSORS: "SCISSORS" };
+      const SIDES = { BLUE: "BLUE", RED: "RED" };
+
+      const PIECE_CONFIG = {
+        [TYPES.ROCK]: { icon: "ph-hand-fist", symbol: "✊", nameVi: "Búa" },
+        [TYPES.PAPER]: { icon: "ph-hand", symbol: "✋", nameVi: "Bao" },
+        [TYPES.SCISSORS]: { icon: "ph-scissors", symbol: "✌️", nameVi: "Kéo" },
+      };
+
+      function canBeat(attackerType, defenderType) {
+        if (attackerType === TYPES.ROCK && defenderType === TYPES.SCISSORS)
+          return true;
+        if (attackerType === TYPES.SCISSORS && defenderType === TYPES.PAPER)
+          return true;
+        if (attackerType === TYPES.PAPER && defenderType === TYPES.ROCK)
+          return true;
+        return false;
+      }
+
+      const BASE_BLUE = { r: 0, c: 0 }; // A1
+      const BASE_RED = { r: 8, c: 8 }; // I9
+
+      function toAlgebraic(r, c) {
+        return `${String.fromCharCode(65 + c)}${r + 1}`;
+      }
+
+      function getInitialBoard() {
+        const board = Array(9)
+          .fill(null)
+          .map(() => Array(9).fill(null));
+        const blueCluster = [
+          { r: 1, c: 3, type: TYPES.PAPER },
+          { r: 1, c: 2, type: TYPES.ROCK },
+          { r: 2, c: 4, type: TYPES.SCISSORS },
+          { r: 2, c: 3, type: TYPES.PAPER },
+          { r: 2, c: 2, type: TYPES.ROCK },
+          { r: 3, c: 3, type: TYPES.SCISSORS },
+          { r: 3, c: 2, type: TYPES.PAPER },
+          { r: 3, c: 1, type: TYPES.ROCK },
+          { r: 4, c: 2, type: TYPES.SCISSORS },
+        ];
+        const redCluster = [
+          { r: 7, c: 5, type: TYPES.PAPER },
+          { r: 7, c: 6, type: TYPES.ROCK },
+          { r: 6, c: 4, type: TYPES.SCISSORS },
+          { r: 6, c: 5, type: TYPES.PAPER },
+          { r: 6, c: 6, type: TYPES.ROCK },
+          { r: 5, c: 5, type: TYPES.SCISSORS },
+          { r: 5, c: 6, type: TYPES.PAPER },
+          { r: 5, c: 7, type: TYPES.ROCK },
+          { r: 4, c: 6, type: TYPES.SCISSORS },
+        ];
+
+        blueCluster.forEach((p, idx) => {
+          board[p.r][p.c] = { id: `B_${idx}`, side: SIDES.BLUE, type: p.type };
+        });
+        redCluster.forEach((p, idx) => {
+          board[p.r][p.c] = { id: `R_${idx}`, side: SIDES.RED, type: p.type };
+        });
+        return board;
+      }
+
+      function countPieces(board, side) {
+        let count = 0;
+        for (let r = 0; r < 9; r++) {
+          for (let c = 0; c < 9; c++) {
+            if (board[r][c] && board[r][c].side === side) count++;
+          }
+        }
+        return count;
+      }
+
+      // Quản lý định danh theo từng tab / máy
+      function getOrCreate(key) {
+        let v = sessionStorage.getItem(key);
+        if (!v) {
+          v = crypto.randomUUID
+            ? crypto.randomUUID()
+            : "id-" + Math.random().toString(36).slice(2) + Date.now();
+          sessionStorage.setItem(key, v);
+        }
+        return v;
+      }
+      const myId = getOrCreate("rpsPlayerId");
+
+      function makeRoomId() {
+        return crypto.randomUUID
+          ? crypto.randomUUID()
+          : "r-" + Math.random().toString(36).slice(2) + Date.now();
+      }
+
+      // Thiết lập phần tử Lobby cho playhtml
+      const lobbyEl = document.getElementById("lobby");
+      const lobbyMessage = document.getElementById("lobby-message");
+      const joinBtn = document.getElementById("join-btn");
+      const lobbySpinner = document.getElementById("lobby-spinner");
+
+      let latestLobbyData = { rooms: {} };
+      let joinRaceLost = false;
+      let boardCreatedForRoom = null;
+
+      lobbyEl.defaultData = { rooms: {} };
+
+      lobbyEl.updateElement = ({ data }) => {
+        latestLobbyData = data || { rooms: {} };
+        renderApp();
+      };
+
+      lobbyEl.onClick = (e, { data, setData }) => {
+        if (!e.target.closest('[data-action="join"]')) return;
+        joinRaceLost = false;
+
+        const rooms = data.rooms || {};
+        const waiting = Object.entries(rooms)
+          .filter(([id, r]) => r && r.guest == null && r.host !== myId)
+          .sort((a, b) => (a[1].createdAt || 0) - (b[1].createdAt || 0));
+
+        if (waiting.length > 0) {
+          // Vào phòng có sẵn: đóng vai trò Đội ĐỎ (Guest / Red)
+          const [roomId] = waiting[0];
+          setData((draft) => {
+            draft.rooms[roomId].guest = myId;
+          });
+          sessionStorage.setItem("rpsRoomId", roomId);
+          sessionStorage.setItem("rpsColor", SIDES.RED);
+          setTimeout(() => verifyClaim(roomId), 600);
+        } else {
+          // Tạo phòng mới: đóng vai trò Đội XANH (Host / Blue)
+          const roomId = makeRoomId();
+          setData((draft) => {
+            draft.rooms = draft.rooms || {};
+            draft.rooms[roomId] = {
+              host: myId,
+              guest: null,
+              createdAt: Date.now(),
+            };
+          });
+          sessionStorage.setItem("rpsRoomId", roomId);
+          sessionStorage.setItem("rpsColor", SIDES.BLUE);
+        }
+        renderApp();
+      };
+
+      function verifyClaim(roomId) {
+        const room = (latestLobbyData.rooms || {})[roomId];
+        if (!room || room.guest !== myId) {
+          sessionStorage.removeItem("rpsRoomId");
+          sessionStorage.removeItem("rpsColor");
+          joinRaceLost = true;
+        }
+        renderApp();
+      }
+
+      function renderApp() {
+        const roomId = sessionStorage.getItem("rpsRoomId");
+        const room = roomId ? (latestLobbyData.rooms || {})[roomId] : null;
+
+        if (!roomId || !room) {
+          document.getElementById("game-container").style.display = "none";
+          document.getElementById("lobby-panel").style.display = "flex";
+          joinBtn.style.display = "inline-block";
+          lobbySpinner.style.display = "none";
+          lobbyMessage.textContent = joinRaceLost
+            ? "Phòng vừa đầy, vui lòng bấm tham gia lại!"
+            : "Bấm tham gia để tìm trận đấu hoặc tạo phòng chờ đối thủ.";
+          return;
+        }
+
+        if (room.guest == null) {
+          document.getElementById("game-container").style.display = "none";
+          document.getElementById("lobby-panel").style.display = "flex";
+          joinBtn.style.display = "none";
+          lobbySpinner.style.display = "block";
+          lobbyMessage.innerHTML = `<span class="text-sky-400 font-bold">Bạn là ĐỘI XANH (Blue)</span><br>Đã tạo phòng thành công. Đang chờ đối thủ Đỏ vào...`;
+          return;
+        }
+
+        // Đã ghép đủ 2 người: Mở giao diện bàn cờ chính
+        document.getElementById("lobby-panel").style.display = "none";
+        document.getElementById("game-container").style.display = "grid";
+        ensureBoardCreated(roomId, room.host, room.guest);
+      }
+
+      // ==================== TẠO BÀN CỜ ĐẦY ĐỦ 3 CỘT ====================
+      function ensureBoardCreated(roomId, hostId, guestId) {
+        if (boardCreatedForRoom === roomId) return;
+        boardCreatedForRoom = roomId;
+
+        const el = document.createElement("div");
+        el.id = "rps-board-" + roomId;
+        el.setAttribute("can-play", "");
+        el.className =
+          "w-full grid grid-cols-1 lg:grid-cols-12 gap-5 items-start";
+
+        // Render cấu trúc khung 3 cột y hệt file 1200 dòng
+        el.innerHTML = `
+        <!-- Left Sidebar: Red Player Info & Capture Grave -->
+        <div class="lg:col-span-3 flex flex-col gap-3 order-2 lg:order-1">
+          <div class="card-red p-4 rounded-2xl bg-slate-800/90 border-2 border-slate-700 transition duration-300 flex flex-col gap-3 shadow-lg">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <span class="w-4 h-4 rounded-full bg-pink-500 shadow-[0_0_10px_#ec4899]"></span>
+                <span class="font-bold text-base text-pink-300">ĐỘI ĐỎ (Red)</span>
+              </div>
+              <span class="text-xs px-2 py-0.5 rounded-md bg-pink-950 text-pink-300 border border-pink-700/50">Căn cứ I9</span>
+            </div>
+            <div class="flex items-center justify-between text-xs text-slate-400">
+              <span>Quân còn lại: <strong class="red-alive-count text-white text-sm">9</strong>/9</span>
+              <span class="red-turn-badge hidden px-2 py-0.5 rounded bg-pink-500/20 text-pink-300 font-bold border border-pink-500 animate-pulse">LƯỢT ĐI</span>
+            </div>
+            <div class="bg-slate-900/70 p-2.5 rounded-xl border border-slate-700/60">
+              <div class="text-[11px] text-slate-400 font-semibold mb-1 flex items-center gap-1">
+                <i class="ph-bold ph-trophy text-pink-400"></i> Đã ăn được quân Xanh:
+              </div>
+              <div class="red-graveyard flex flex-wrap gap-1.5 min-h-[36px] items-center">
+                <span class="text-xs text-slate-600 italic">Chưa ăn quân nào</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Action Log Box -->
+          <div class="p-3 rounded-2xl bg-slate-800/60 border border-slate-700/70 text-xs flex flex-col gap-1.5 shadow-md">
+            <div class="font-bold text-slate-300 flex items-center justify-between pb-1 border-b border-slate-700">
+              <span><i class="ph-bold ph-clock-counter-clockwise"></i> Nhật ký nước đi</span>
+              <span class="turn-counter text-[10px] text-slate-500 font-mono">Lượt: #1</span>
+            </div>
+            <div class="log-box h-28 overflow-y-auto space-y-1 pr-1 font-mono text-[11px] text-slate-300 scrollbar-thin">
+              <div class="text-slate-500 italic">Trò chơi bắt đầu. Quân Xanh đi trước!</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Center: Interactive Game Board with Grid Notation -->
+        <div class="lg:col-span-6 flex flex-col items-center justify-center order-1 lg:order-2">
+          <div class="turn-banner mb-3 px-5 py-2 rounded-full font-extrabold text-sm flex items-center gap-2 shadow-lg transition-all duration-300"></div>
+
+          <div class="relative p-2 sm:p-3 bg-gradient-to-b from-slate-700 to-slate-900 rounded-3xl shadow-2xl border-4 border-slate-600">
+            <div class="grid grid-cols-9 text-center text-xs font-bold text-slate-400 font-mono mb-1 px-5">
+              <span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>H</span><span>I</span>
+            </div>
+
+            <div class="flex items-center">
+              <div class="flex flex-col justify-around text-xs font-bold text-slate-400 font-mono pr-1.5 h-[340px] sm:h-[450px] md:h-[500px]">
+                <span>9</span><span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
+              </div>
+
+              <div class="board-grid grid grid-cols-9 grid-rows-9 gap-1 w-[330px] h-[330px] sm:w-[440px] sm:h-[440px] md:w-[490px] md:h-[490px] bg-slate-900 p-1 rounded-2xl shadow-inner relative overflow-hidden"></div>
+
+              <div class="flex flex-col justify-around text-xs font-bold text-slate-400 font-mono pl-1.5 h-[340px] sm:h-[450px] md:h-[500px]">
+                <span>9</span><span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-9 text-center text-xs font-bold text-slate-400 font-mono mt-1 px-5">
+              <span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>H</span><span>I</span>
+            </div>
+          </div>
+
+          <!-- Reset Controls -->
+          <div class="board-controls mt-4 flex items-center gap-3"></div>
+        </div>
+
+        <!-- Right Sidebar: Blue Player Info & Win Conditions -->
+        <div class="lg:col-span-3 flex flex-col gap-3 order-3">
+          <div class="card-blue p-4 rounded-2xl bg-slate-800/90 border-2 border-slate-700 transition duration-300 flex flex-col gap-3 shadow-lg">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <span class="w-4 h-4 rounded-full bg-sky-400 shadow-[0_0_10px_#38bdf8]"></span>
+                <span class="font-bold text-base text-sky-300">ĐỘI XANH (Blue)</span>
+              </div>
+              <span class="text-xs px-2 py-0.5 rounded-md bg-sky-950 text-sky-300 border border-sky-700/50">Căn cứ A1</span>
+            </div>
+            <div class="flex items-center justify-between text-xs text-slate-400">
+              <span>Quân còn lại: <strong class="blue-alive-count text-white text-sm">9</strong>/9</span>
+              <span class="blue-turn-badge hidden px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-bold border border-sky-500 animate-pulse">LƯỢT ĐI</span>
+            </div>
+            <div class="bg-slate-900/70 p-2.5 rounded-xl border border-slate-700/60">
+              <div class="text-[11px] text-slate-400 font-semibold mb-1 flex items-center gap-1">
+                <i class="ph-bold ph-trophy text-sky-400"></i> Đã ăn được quân Đỏ:
+              </div>
+              <div class="blue-graveyard flex flex-wrap gap-1.5 min-h-[36px] items-center">
+                <span class="text-xs text-slate-600 italic">Chưa ăn quân nào</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Win Conditions Card -->
+          <div class="p-3.5 rounded-2xl bg-slate-800/60 border border-slate-700/70 text-xs text-slate-300 flex flex-col gap-2">
+            <div class="font-bold text-slate-200 flex items-center gap-1.5 text-sm">
+              <i class="ph-bold ph-flag-banner text-amber-400 text-base"></i> 2 Cách để Chiến Thắng:
+            </div>
+            <ul class="space-y-1.5 text-[12px] list-disc list-inside text-slate-300">
+              <li><span class="font-semibold text-amber-300">Chiếm căn cứ địch:</span> Đưa 1 quân bất kỳ đến căn cứ đối phương (<strong class="text-pink-400">I9</strong> cho Xanh, <strong class="text-sky-400">A1</strong> cho Đỏ).</li>
+              <li><span class="font-semibold text-amber-300">Tiêu diệt toàn bộ:</span> Ăn sạch 9 quân của đối thủ.</li>
+            </ul>
+            <div class="mt-1 pt-2 border-t border-slate-700/60 text-[11px] text-slate-400">
+              💡 <em>Mẹo: Quân cùng loại không thể ăn nhau. Bạn chỉ có thể ăn quân mình khắc chế!</em>
+            </div>
+          </div>
+
+          <!-- Role Indicator Hint -->
+          <div class="p-3 rounded-2xl bg-gradient-to-br from-indigo-950/70 to-slate-900/90 border border-indigo-700/50 text-[11px] text-indigo-200 flex flex-col gap-1.5">
+            <div class="flex items-center gap-1.5 font-bold text-indigo-300">
+              <i class="ph-bold ph-user text-base"></i> Vai trò của bạn:
+            </div>
+            <p class="role-desc leading-relaxed"></p>
+          </div>
+        </div>
+      `;
+
+        el.defaultData = {
+          board: getInitialBoard(),
+          currentTurn: SIDES.BLUE,
+          selected: null,
+          capturedByBlue: [],
+          capturedByRed: [],
+          turnNumber: 1,
+          moveLogs: ["Trò chơi bắt đầu. Quân Xanh đi trước!"],
+          winner: null,
+          winReason: null,
+          resetRequestedBy: null,
+          blue: hostId,
+          red: guestId,
+        };
+
+        el.updateElement = ({ data }) => renderBoard(el, data);
+
+        el.onClick = (e, { data, setData }) => {
+          const myColor =
+            data.blue === myId
+              ? SIDES.BLUE
+              : data.red === myId
+                ? SIDES.RED
+                : null;
+          if (!myColor) return;
+
+          // Xử lý các nút yêu cầu làm mới ván cờ
+          const action = e.target.dataset.action;
+          if (action === "request-reset") {
+            if (!data.resetRequestedBy)
+              setData({ ...data, resetRequestedBy: myColor });
+            return;
+          }
+          if (action === "cancel-reset") {
+            if (data.resetRequestedBy === myColor)
+              setData({ ...data, resetRequestedBy: null });
+            return;
+          }
+          if (action === "decline-reset") {
+            setData({ ...data, resetRequestedBy: null });
+            return;
+          }
+          if (action === "accept-reset") {
+            setData({
+              ...data,
+              board: getInitialBoard(),
+              currentTurn: SIDES.BLUE,
+              selected: null,
+              capturedByBlue: [],
+              capturedByRed: [],
+              turnNumber: 1,
+              moveLogs: ["Đã làm mới lại ván đấu. Quân Xanh đi trước!"],
+              winner: null,
+              winReason: null,
+              resetRequestedBy: null,
+            });
+            return;
+          }
+
+          if (data.winner) return;
+
+          // Chỉ cho phép đi khi tới lượt của phe mình
+          if (myColor !== data.currentTurn) return;
+
+          const tileEl = e.target.closest(".tile");
+          if (!tileEl) return;
+          const r = parseInt(tileEl.dataset.r, 10);
+          const c = parseInt(tileEl.dataset.c, 10);
+
+          const clickedPiece = data.board[r][c];
+
+          // 1. Chưa chọn quân: Bấm vào quân của phe mình
+          if (!data.selected) {
+            if (clickedPiece && clickedPiece.side === myColor) {
+              audio.init();
+              setData({ ...data, selected: { r, c } });
+            }
+            return;
+          }
+
+          // 2. Nhấp lại vào đúng quân đang chọn: Hủy chọn
+          if (data.selected.r === r && data.selected.c === c) {
+            setData({ ...data, selected: null });
+            return;
+          }
+
+          // 3. Đã chọn quân: Kiểm tra nước đi hợp lệ
+          const fromR = data.selected.r;
+          const fromC = data.selected.c;
+          const activePiece = data.board[fromR][fromC];
+
+          const isOrthogonal = Math.abs(fromR - r) + Math.abs(fromC - c) === 1;
+
+          if (isOrthogonal) {
+            let canMove = false;
+            let isCapture = false;
+
+            if (!clickedPiece) {
+              canMove = true;
+            } else if (
+              clickedPiece.side !== myColor &&
+              canBeat(activePiece.type, clickedPiece.type)
+            ) {
+              canMove = true;
+              isCapture = true;
+            }
+
+            if (canMove) {
+              const newBoard = data.board.map((row) => [...row]);
+              const newCapBlue = [...data.capturedByBlue];
+              const newCapRed = [...data.capturedByRed];
+              const newLogs = [...data.moveLogs];
+
+              if (isCapture) {
+                audio.playCapture();
+                if (myColor === SIDES.BLUE) newCapBlue.push(clickedPiece);
+                else newCapRed.push(clickedPiece);
+
+                newLogs.push(
+                  `<span class="${myColor === SIDES.BLUE ? "text-sky-400" : "text-pink-400"} font-bold">${myColor === SIDES.BLUE ? "Xanh" : "Đỏ"}</span>: ${PIECE_CONFIG[activePiece.type].nameVi} (${toAlgebraic(fromR, fromC)}) ⚔️ ăn ${PIECE_CONFIG[clickedPiece.type].nameVi} (${toAlgebraic(r, c)})`,
+                );
+
+                const rect = tileEl.getBoundingClientRect();
+                triggerParticleEffect(
+                  rect.left + rect.width / 2,
+                  rect.top + rect.height / 2,
+                  myColor === SIDES.BLUE ? "#38bdf8" : "#f43f5e",
+                );
+              } else {
+                audio.playMove();
+                newLogs.push(
+                  `<span class="${myColor === SIDES.BLUE ? "text-sky-400" : "text-pink-400"}">${myColor === SIDES.BLUE ? "Xanh" : "Đỏ"}</span>: ${PIECE_CONFIG[activePiece.type].nameVi} từ ${toAlgebraic(fromR, fromC)} ➔ ${toAlgebraic(r, c)}`,
+                );
+              }
+
+              newBoard[r][c] = activePiece;
+              newBoard[fromR][fromC] = null;
+
+              // Kiểm tra chiến thắng
+              let winner = null;
+              let winReason = null;
+
+              if (
+                myColor === SIDES.BLUE &&
+                r === BASE_RED.r &&
+                c === BASE_RED.c
+              ) {
+                winner = SIDES.BLUE;
+                winReason = "Quân Xanh đã đột kích thành công Căn Cứ Đỏ (I9)!";
+              } else if (
+                myColor === SIDES.RED &&
+                r === BASE_BLUE.r &&
+                c === BASE_BLUE.c
+              ) {
+                winner = SIDES.RED;
+                winReason = "Quân Đỏ đã đột kích thành công Căn Cứ Xanh (A1)!";
+              } else if (countPieces(newBoard, SIDES.RED) === 0) {
+                winner = SIDES.BLUE;
+                winReason = "Quân Xanh đã tiêu diệt toàn bộ quân Đội Đỏ!";
+              } else if (countPieces(newBoard, SIDES.BLUE) === 0) {
+                winner = SIDES.RED;
+                winReason = "Quân Đỏ đã tiêu diệt toàn bộ quân Đội Xanh!";
+              }
+
+              if (winner) audio.playVictory();
+
+              setData({
+                ...data,
+                board: newBoard,
+                currentTurn: myColor === SIDES.BLUE ? SIDES.RED : SIDES.BLUE,
+                selected: null,
+                capturedByBlue: newCapBlue,
+                capturedByRed: newCapRed,
+                turnNumber: data.turnNumber + 1,
+                moveLogs: newLogs,
+                winner: winner,
+                winReason: winReason,
+              });
+              return;
+            }
+          }
+
+          // Nhấp sang một quân khác của mình
+          if (clickedPiece && clickedPiece.side === myColor) {
+            setData({ ...data, selected: { r, c } });
+          } else {
+            setData({ ...data, selected: null });
+          }
+        };
+
+        const container = document.getElementById("game-container");
+        container.innerHTML = "";
+        container.appendChild(el);
+        window.playhtml.setupPlayElement(el);
+      }
+
+      // ==================== HÀM RENDER GIAO DIỆN BÀN CỜ CHI TIẾT ====================
+      function renderBoard(el, data) {
+        const myColor =
+          data.blue === myId
+            ? SIDES.BLUE
+            : data.red === myId
+              ? SIDES.RED
+              : null;
+
+        // 1. Cập nhật thẻ thông tin vai trò bên phải
+        const roleDesc = el.querySelector(".role-desc");
+        if (myColor === SIDES.BLUE) {
+          roleDesc.innerHTML = `Bạn đang cầm <strong class="text-sky-400">ĐỘI XANH (Host)</strong>. Xuất phát góc dưới A1, mục tiêu chiếm I9.`;
+        } else if (myColor === SIDES.RED) {
+          roleDesc.innerHTML = `Bạn đang cầm <strong class="text-pink-400">ĐỘI ĐỎ (Guest)</strong>. Xuất phát góc trên I9, mục tiêu chiếm A1.`;
+        } else {
+          roleDesc.innerHTML = `Đang xem ván đấu với tư cách khán giả.`;
+        }
+
+        // 2. Banner lượt đi ở giữa
+        const turnBanner = el.querySelector(".turn-banner");
+        const cardBlue = el.querySelector(".card-blue");
+        const cardRed = el.querySelector(".card-red");
+        const blueBadge = el.querySelector(".blue-turn-badge");
+        const redBadge = el.querySelector(".red-turn-badge");
+
+        if (data.winner) {
+          turnBanner.className =
+            "turn-banner mb-3 px-6 py-2 rounded-full font-extrabold text-sm flex items-center gap-2 shadow-lg bg-amber-500/20 text-amber-300 border border-amber-500";
+          turnBanner.innerHTML = `🏆 CHIẾN THẮNG: ${data.winner === SIDES.BLUE ? "ĐỘI XANH" : "ĐỘI ĐỎ"}`;
+          cardBlue.classList.remove("turn-glow-blue");
+          cardRed.classList.remove("turn-glow-red");
+          blueBadge.classList.add("hidden");
+          redBadge.classList.add("hidden");
+
+          // Hiện modal chiến thắng nếu chưa đóng
+          const winTitle = document.getElementById("victory-title");
+          const winReason = document.getElementById("victory-reason");
+          const winBadge = document.getElementById("victory-badge");
+          const isBlue = data.winner === SIDES.BLUE;
+
+          winTitle.innerText = isBlue
+            ? "QUÂN XANH THẮNG TRẬN!"
+            : "QUÂN ĐỎ THẮNG TRẬN!";
+          winTitle.className = `text-2xl sm:text-3xl font-black mb-2 ${isBlue ? "text-sky-400" : "text-pink-400"}`;
+          winReason.innerText = data.winReason;
+          winBadge.className = `w-20 h-20 mx-auto rounded-full flex items-center justify-center text-4xl mb-4 shadow-xl ${
+            isBlue
+              ? "bg-sky-500/20 text-sky-400 border-2 border-sky-400"
+              : "bg-pink-500/20 text-pink-400 border-2 border-pink-400"
+          }`;
+          victoryModal.classList.remove("hidden");
+        } else if (data.currentTurn === SIDES.BLUE) {
+          turnBanner.className =
+            "turn-banner mb-3 px-6 py-2 rounded-full font-extrabold text-sm flex items-center gap-2 shadow-lg bg-sky-500/20 text-sky-300 border border-sky-500 turn-glow-blue";
+          turnBanner.innerHTML = `<span class="w-3 h-3 rounded-full bg-sky-400 animate-ping"></span> LƯỢT QUÂN XANH (Blue) ${myColor === SIDES.BLUE ? "— Lượt của bạn!" : ""}`;
+          cardBlue.classList.add("turn-glow-blue");
+          cardRed.classList.remove("turn-glow-red");
+          blueBadge.classList.remove("hidden");
+          redBadge.classList.add("hidden");
+        } else {
+          turnBanner.className =
+            "turn-banner mb-3 px-6 py-2 rounded-full font-extrabold text-sm flex items-center gap-2 shadow-lg bg-pink-500/20 text-pink-300 border border-pink-500 turn-glow-red";
+          turnBanner.innerHTML = `<span class="w-3 h-3 rounded-full bg-pink-400 animate-ping"></span> LƯỢT QUÂN ĐỎ (Red) ${myColor === SIDES.RED ? "— Lượt của bạn!" : ""}`;
+          cardRed.classList.add("turn-glow-red");
+          cardBlue.classList.remove("turn-glow-blue");
+          redBadge.classList.remove("hidden");
+          blueBadge.classList.add("hidden");
+        }
+
+        // 3. Số lượng quân còn lại và danh sách quân đã ăn (Graveyard)
+        el.querySelector(".blue-alive-count").innerText = countPieces(
+          data.board,
+          SIDES.BLUE,
+        );
+        el.querySelector(".red-alive-count").innerText = countPieces(
+          data.board,
+          SIDES.RED,
+        );
+        el.querySelector(".turn-counter").innerText =
+          `Lượt: #${data.turnNumber}`;
+
+        renderGraveyardList(
+          el.querySelector(".blue-graveyard"),
+          data.capturedByBlue,
+          "token-red",
+        );
+        renderGraveyardList(
+          el.querySelector(".red-graveyard"),
+          data.capturedByRed,
+          "token-blue",
+        );
+
+        // 4. Cập nhật nhật ký nước đi (Log box)
+        const logBox = el.querySelector(".log-box");
+        logBox.innerHTML = "";
+        data.moveLogs.forEach((entry) => {
+          const item = document.createElement("div");
+          item.innerHTML = entry;
+          logBox.appendChild(item);
+        });
+        logBox.scrollTop = logBox.scrollHeight;
+
+        // 5. Tính toán các ô đi hợp lệ
+        let legalMoves = [];
+        if (data.selected && myColor === data.currentTurn && !data.winner) {
+          const activeP = data.board[data.selected.r][data.selected.c];
+          if (activeP) {
+            const dirs = [
+              [-1, 0],
+              [1, 0],
+              [0, -1],
+              [0, 1],
+            ];
+            dirs.forEach(([dr, dc]) => {
+              const nr = data.selected.r + dr;
+              const nc = data.selected.c + dc;
+              if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) {
+                const dest = data.board[nr][nc];
+                if (!dest) {
+                  legalMoves.push({ r: nr, c: nc, isCapture: false });
+                } else if (
+                  dest.side !== activeP.side &&
+                  canBeat(activeP.type, dest.type)
+                ) {
+                  legalMoves.push({ r: nr, c: nc, isCapture: true });
+                }
+              }
+            });
+          }
+        }
+
+        // 6. Vẽ 81 ô bàn cờ (Row 8 trên cùng -> Row 0 dưới cùng)
+        const grid = el.querySelector(".board-grid");
+        grid.innerHTML = "";
+        for (let r = 8; r >= 0; r--) {
+          for (let c = 0; c < 9; c++) {
+            const tile = document.createElement("div");
+            tile.dataset.r = r;
+            tile.dataset.c = c;
+            const isDark = (r + c) % 2 === 1;
+
+            let tileClasses = `tile relative flex items-center justify-center transition-all duration-150 rounded-lg cursor-pointer ${isDark ? "tile-dark" : "tile-light"}`;
+
+            if (r === BASE_BLUE.r && c === BASE_BLUE.c)
+              tileClasses += " tile-blue-base";
+            else if (r === BASE_RED.r && c === BASE_RED.c)
+              tileClasses += " tile-red-base";
+
+            tile.className = tileClasses;
+
+            if (r === BASE_BLUE.r && c === BASE_BLUE.c && !data.board[r][c]) {
+              tile.innerHTML = `<span class="text-[9px] font-mono font-bold text-sky-400/80 pointer-events-none">BASE A1</span>`;
+            } else if (
+              r === BASE_RED.r &&
+              c === BASE_RED.c &&
+              !data.board[r][c]
+            ) {
+              tile.innerHTML = `<span class="text-[9px] font-mono font-bold text-pink-400/80 pointer-events-none">BASE I9</span>`;
+            }
+
+            const piece = data.board[r][c];
+            const isSelected =
+              data.selected && data.selected.r === r && data.selected.c === c;
+
+            if (piece) {
+              const pieceEl = document.createElement("div");
+              const isBlue = piece.side === SIDES.BLUE;
+              const config = PIECE_CONFIG[piece.type];
+
+              pieceEl.className = `w-[82%] h-[82%] rounded-full flex flex-col items-center justify-center font-bold transition-transform cursor-pointer shadow-md select-none ${
+                isBlue ? "token-blue" : "token-red"
+              } ${isSelected ? "token-selected" : "hover:scale-105"}`;
+
+              pieceEl.innerHTML = `
+              <i class="ph-bold ${config.icon} text-lg sm:text-2xl leading-none"></i>
+              <span class="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-tight mt-0.5">${config.nameVi}</span>
+            `;
+              tile.appendChild(pieceEl);
+            }
+
+            const move = legalMoves.find((m) => m.r === r && m.c === c);
+            if (move) {
+              if (move.isCapture) {
+                const captureRing = document.createElement("div");
+                captureRing.className =
+                  "absolute capture-target-ring flex items-center justify-center pointer-events-none";
+                tile.appendChild(captureRing);
+              } else {
+                const dot = document.createElement("div");
+                dot.className = "move-target-dot pointer-events-none";
+                tile.appendChild(dot);
+              }
+            }
+
+            grid.appendChild(tile);
+          }
+        }
+
+        // 7. Bảng điều khiển Reset ván cờ có đồng thuận
+        const controls = el.querySelector(".board-controls");
+        controls.innerHTML = "";
+        if (!myColor) {
+          // Khán giả: Không hiện nút reset
+        } else if (!data.resetRequestedBy) {
+          const btn = document.createElement("button");
+          btn.textContent = "Yêu Cầu Làm Mới Ván Cờ";
+          btn.dataset.action = "request-reset";
+          btn.className =
+            "px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded-xl border border-slate-600 transition flex items-center gap-1.5 shadow-md";
+          btn.innerHTML = `<i class="ph-bold ph-arrows-counter-clockwise"></i> Yêu Cầu Làm Mới Ván Cờ`;
+          controls.appendChild(btn);
+        } else if (data.resetRequestedBy === myColor) {
+          controls.innerHTML = `
+          <p class="text-xs text-slate-400">Đang chờ đối phương xác nhận làm mới...</p>
+          <button data-action="cancel-reset" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs rounded-xl border border-slate-500 font-semibold">Hủy Yêu Cầu</button>
+        `;
+        } else {
+          controls.innerHTML = `
+          <p class="text-xs text-amber-300 font-bold">Đối thủ muốn làm mới lại ván đấu!</p>
+          <div class="flex gap-2">
+            <button data-action="accept-reset" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow">Đồng ý</button>
+            <button data-action="decline-reset" class="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow">Từ chối</button>
+          </div>
+        `;
+        }
+      }
+
+      function renderGraveyardList(container, capturedList, styleClass) {
+        if (capturedList.length === 0) {
+          container.innerHTML = `<span class="text-xs text-slate-500 italic">Chưa ăn quân nào</span>`;
+          return;
+        }
+        container.innerHTML = "";
+        capturedList.forEach((p) => {
+          const item = document.createElement("div");
+          const cfg = PIECE_CONFIG[p.type];
+          item.className = `w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${styleClass} shadow`;
+          item.title = `${p.side === SIDES.BLUE ? "Xanh" : "Đỏ"} ${cfg.nameVi}`;
+          item.innerHTML = `<i class="ph-bold ${cfg.icon}"></i>`;
+          container.appendChild(item);
+        });
+      }
+
+      // Tự động khôi phục ván đấu nếu F5 lại trang
+      renderApp();
+    </script>
+
+    <!-- ==================== PLAYHTML CLOUD INITIALIZATION ==================== -->
+    <script type="module">
+      import { playhtml } from "https://unpkg.com/playhtml@latest";
+      window.playhtml = playhtml;
+      playhtml.init();
+    </script>
+  </body>
 </html>
