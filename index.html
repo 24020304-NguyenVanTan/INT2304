@@ -1,0 +1,851 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>PlayHTML Chess</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+
+            display: grid;
+            place-items: center;
+
+            background: #151515;
+            color: #eee;
+
+            font-family: system-ui, sans-serif;
+        }
+
+        main {
+            width: min(94vw, 720px);
+            text-align: center;
+        }
+
+        h1 {
+            margin: 0 0 6px;
+            font-size: 1.6rem;
+        }
+
+        #status {
+            min-height: 1.5em;
+            margin-bottom: 12px;
+            color: #bbb;
+        }
+
+        #board {
+            width: min(88vw, 640px);
+            aspect-ratio: 1;
+
+            margin: auto;
+
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+
+            border: 3px solid #333;
+
+            user-select: none;
+        }
+
+        .square {
+            border: 0;
+            padding: 0;
+
+            display: grid;
+            place-items: center;
+
+            font-size: clamp(30px, 7vw, 58px);
+            line-height: 1;
+
+            cursor: pointer;
+            position: relative;
+        }
+
+        .light {
+            background: #e6d7b8;
+        }
+
+        .dark {
+            background: #92734e;
+        }
+
+        .selected {
+            outline: 4px solid #f5d76e;
+            outline-offset: -4px;
+        }
+
+        /* Legal move indicator */
+        .legal::after {
+            content: "";
+
+            width: 20%;
+            aspect-ratio: 1;
+
+            border-radius: 50%;
+
+            background: #2228;
+
+            position: absolute;
+        }
+
+        /* Capture indicator */
+        .capture::after {
+            content: "";
+
+            position: absolute;
+            inset: 7%;
+
+            border: 5px solid #d44;
+            border-radius: 50%;
+        }
+
+        .piece {
+            filter: drop-shadow(1px 2px 1px #0008);
+        }
+
+        .white-piece {
+            color: white;
+            text-shadow:
+                0 1px 2px #000,
+                0 0 2px #000;
+        }
+
+        .black-piece {
+            color: #111;
+            text-shadow: 0 1px 1px #fff5;
+        }
+
+        #controls {
+            margin-top: 14px;
+
+            display: flex;
+            justify-content: center;
+
+            gap: 8px;
+        }
+
+        button.control {
+            border: 1px solid #555;
+            background: #292929;
+            color: #eee;
+
+            padding: 8px 14px;
+
+            border-radius: 6px;
+
+            cursor: pointer;
+        }
+
+        button.control:hover {
+            background: #383838;
+        }
+
+        #hint {
+            margin-top: 10px;
+            color: #888;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+
+<body>
+
+<main>
+
+    <h1>♟ PlayHTML Chess</h1>
+
+    <div id="status">
+        Connecting...
+    </div>
+
+    <div id="board"></div>
+
+    <div id="controls">
+        <button class="control" id="reset">
+            New game
+        </button>
+    </div>
+
+    <div id="hint">
+        Open this exact page in another browser/device for the second player.
+    </div>
+
+</main>
+
+
+<script type="module">
+
+    import { playhtml }
+        from "https://unpkg.com/playhtml";
+
+    import { Chess }
+        from "https://esm.run/chess.js@1.5.1";
+
+
+    /*
+     * ------------------------------------------------------------
+     * Chess setup
+     * ------------------------------------------------------------
+     */
+
+    const START_FEN =
+        new Chess().fen();
+
+
+    const pieceGlyph = {
+        wp: "♙",
+        wn: "♘",
+        wb: "♗",
+        wr: "♖",
+        wq: "♕",
+        wk: "♔",
+
+        bp: "♟",
+        bn: "♞",
+        bb: "♝",
+        br: "♜",
+        bq: "♛",
+        bk: "♚"
+    };
+
+
+    const files = [
+        "a",
+        "b",
+        "c",
+        "d",
+        "e",
+        "f",
+        "g",
+        "h"
+    ];
+
+
+    /*
+     * ------------------------------------------------------------
+     * Identify this browser/player
+     * ------------------------------------------------------------
+     *
+     * sessionStorage means:
+     *
+     *   Tab A -> player A
+     *   Tab B -> player B
+     *
+     * Reloading a tab keeps the same player.
+     */
+
+    const myId =
+        sessionStorage.getItem("chess-player-id")
+        || crypto.randomUUID();
+
+    sessionStorage.setItem(
+        "chess-player-id",
+        myId
+    );
+
+
+    /*
+     * ------------------------------------------------------------
+     * PlayHTML shared state
+     * ------------------------------------------------------------
+     */
+
+    await playhtml.init();
+
+    await playhtml.ready;
+
+
+    /*
+     * The page URL determines the PlayHTML room.
+     *
+     * Therefore:
+     *
+     *   https://username.github.io/chess/
+     *
+     * is one shared chess room.
+     */
+
+    const channel =
+        playhtml.createPageData(
+            "chess-game",
+            {
+                fen: START_FEN,
+
+                white: null,
+                black: null
+            }
+        );
+
+
+    /*
+     * Claim a player slot.
+     *
+     * First person -> White
+     * Second person -> Black
+     * Third person -> spectator
+     */
+
+    channel.setData(game => {
+
+        // Already assigned
+        if (
+            game.white === myId ||
+            game.black === myId
+        ) {
+            return;
+        }
+
+        // Take White
+        if (!game.white) {
+            game.white = myId;
+        }
+
+        // Otherwise take Black
+        else if (!game.black) {
+            game.black = myId;
+        }
+    });
+
+
+    /*
+     * Whenever the shared state changes,
+     * redraw the board.
+     */
+
+    channel.onUpdate(render);
+
+
+    /*
+     * Initial render
+     */
+
+    render(
+        channel.getData()
+    );
+
+
+    /*
+     * ------------------------------------------------------------
+     * New game
+     * ------------------------------------------------------------
+     */
+
+    document
+        .getElementById("reset")
+        .addEventListener("click", () => {
+
+            channel.setData(game => {
+
+                game.fen = START_FEN;
+            });
+
+            selected = null;
+            legalMoves = [];
+        });
+
+
+    /*
+     * ------------------------------------------------------------
+     * Selection state
+     * ------------------------------------------------------------
+     */
+
+    let selected = null;
+
+    let legalMoves = [];
+
+
+    /*
+     * Return:
+     *
+     *     "w" -> this player is White
+     *     "b" -> this player is Black
+     *     null -> spectator
+     */
+
+    function myColor(game) {
+
+        if (game.white === myId) {
+            return "w";
+        }
+
+        if (game.black === myId) {
+            return "b";
+        }
+
+        return null;
+    }
+
+
+    /*
+     * ------------------------------------------------------------
+     * Draw board
+     * ------------------------------------------------------------
+     */
+
+    function render(game) {
+
+        const chess =
+            new Chess(game.fen);
+
+        const board =
+            document.getElementById("board");
+
+        board.innerHTML = "";
+
+
+        const turn =
+            chess.turn();
+
+        const color =
+            myColor(game);
+
+        const gameOver =
+            chess.isGameOver();
+
+
+        /*
+         * Status text
+         */
+
+        let status;
+
+
+        if (gameOver) {
+
+            if (chess.isCheckmate()) {
+
+                status =
+                    `Checkmate — ${
+                        turn === "w"
+                            ? "Black"
+                            : "White"
+                    } wins`;
+
+            }
+
+            else if (chess.isDraw()) {
+
+                status = "Draw";
+
+            }
+
+            else {
+
+                status = "Game over";
+            }
+        }
+
+        else {
+
+            status =
+                `${turn === "w"
+                    ? "White"
+                    : "Black"
+                } to move`;
+
+
+            if (color) {
+
+                if (color === turn) {
+                    status += " — your turn";
+                }
+
+                else {
+                    status += " — opponent's turn";
+                }
+
+            }
+
+            else {
+
+                status += " — spectating";
+            }
+        }
+
+
+        const playerText =
+            `White: ${
+                game.white
+                    ? (
+                        game.white === myId
+                            ? "you"
+                            : "player"
+                    )
+                    : "waiting"
+            } · Black: ${
+                game.black
+                    ? (
+                        game.black === myId
+                            ? "you"
+                            : "player"
+                    )
+                    : "waiting"
+            }`;
+
+
+        document
+            .getElementById("status")
+            .textContent =
+                `${status} | ${playerText}`;
+
+
+        /*
+         * --------------------------------------------------------
+         * Generate the 64 squares
+         * --------------------------------------------------------
+         */
+
+        const boardState =
+            chess.board();
+
+
+        /*
+         * Draw ranks 8 -> 1.
+         */
+
+        for (
+            let rank = 7;
+            rank >= 0;
+            --rank
+        ) {
+
+            for (
+                let file = 0;
+                file < 8;
+                ++file
+            ) {
+
+                const square =
+                    files[file] +
+                    (rank + 1);
+
+
+                const button =
+                    document.createElement("button");
+
+
+                button.className =
+                    "square " +
+                    (
+                        ((file + rank) & 1)
+                            ? "dark"
+                            : "light"
+                    );
+
+
+                button.dataset.square =
+                    square;
+
+
+                /*
+                 * Piece on this square?
+                 */
+
+                const piece =
+                    boardState[7 - rank][file];
+
+
+                if (piece) {
+
+                    const span =
+                        document.createElement("span");
+
+
+                    span.className =
+                        `piece ${
+                            piece.color === "w"
+                                ? "white-piece"
+                                : "black-piece"
+                        }`;
+
+
+                    span.textContent =
+                        pieceGlyph[
+                            piece.color +
+                            piece.type
+                        ];
+
+
+                    button.appendChild(span);
+                }
+
+
+                /*
+                 * Highlight selected square.
+                 */
+
+                if (
+                    selected === square
+                ) {
+                    button.classList.add(
+                        "selected"
+                    );
+                }
+
+
+                /*
+                 * Highlight legal moves.
+                 */
+
+                const move =
+                    legalMoves.find(
+                        m => m.to === square
+                    );
+
+
+                if (move) {
+
+                    button.classList.add(
+                        move.captured
+                            ? "capture"
+                            : "legal"
+                    );
+                }
+
+
+                /*
+                 * Handle click.
+                 */
+
+                button.addEventListener(
+                    "click",
+                    () => clickSquare(square)
+                );
+
+
+                board.appendChild(button);
+            }
+        }
+    }
+
+
+    /*
+     * ------------------------------------------------------------
+     * Handle square click
+     * ------------------------------------------------------------
+     */
+
+    function clickSquare(square) {
+
+        const game =
+            channel.getData();
+
+
+        const chess =
+            new Chess(game.fen);
+
+
+        const color =
+            myColor(game);
+
+
+        /*
+         * Can't play if:
+         *
+         * - spectator
+         * - game over
+         * - opponent's turn
+         */
+
+        if (
+            !color ||
+            chess.isGameOver() ||
+            chess.turn() !== color
+        ) {
+            return;
+        }
+
+
+        /*
+         * --------------------------------------------------------
+         * Nothing selected yet.
+         *
+         * Select one of our pieces.
+         * --------------------------------------------------------
+         */
+
+        if (!selected) {
+
+            const piece =
+                chess.get(square);
+
+
+            if (
+                !piece ||
+                piece.color !== color
+            ) {
+                return;
+            }
+
+
+            selected =
+                square;
+
+
+            legalMoves =
+                chess.moves({
+                    square,
+                    verbose: true
+                });
+
+
+            render(game);
+
+            return;
+        }
+
+
+        /*
+         * --------------------------------------------------------
+         * Clicking another friendly piece changes selection.
+         * --------------------------------------------------------
+         */
+
+        const clickedPiece =
+            chess.get(square);
+
+
+        if (
+            clickedPiece?.color === color
+        ) {
+
+            selected =
+                square;
+
+
+            legalMoves =
+                chess.moves({
+                    square,
+                    verbose: true
+                });
+
+
+            render(game);
+
+            return;
+        }
+
+
+        /*
+         * --------------------------------------------------------
+         * Is this a legal destination?
+         * --------------------------------------------------------
+         */
+
+        const move =
+            legalMoves.find(
+                m => m.to === square
+            );
+
+
+        if (!move) {
+
+            selected = null;
+            legalMoves = [];
+
+            render(game);
+
+            return;
+        }
+
+
+        /*
+         * --------------------------------------------------------
+         * Promotion
+         * --------------------------------------------------------
+         */
+
+        let promotion;
+
+
+        if (move.promotion) {
+
+            promotion =
+                (
+                    prompt(
+                        "Promote to: q, r, b, or n",
+                        "q"
+                    )
+                    || "q"
+                ).toLowerCase();
+
+
+            if (
+                ![
+                    "q",
+                    "r",
+                    "b",
+                    "n"
+                ].includes(promotion)
+            ) {
+                return;
+            }
+        }
+
+
+        /*
+         * --------------------------------------------------------
+         * Make the move using chess.js
+         * --------------------------------------------------------
+         */
+
+        try {
+
+            chess.move({
+                from: selected,
+                to: square,
+                promotion
+            });
+
+
+            const newFen =
+                chess.fen();
+
+
+            /*
+             * Only update if the shared game is
+             * still the game we started from.
+             *
+             * This prevents accidentally overwriting
+             * an opponent move.
+             */
+
+            channel.setData(latest => {
+
+                if (
+                    latest.fen === game.fen
+                ) {
+                    latest.fen =
+                        newFen;
+                }
+            });
+
+        }
+
+        catch (_) {
+
+            // chess.js rejected the move
+        }
+
+
+        /*
+         * Clear selection.
+         */
+
+        selected = null;
+
+        legalMoves = [];
+    }
+
+</script>
+
+</body>
+</html>
