@@ -20,13 +20,52 @@
     color: #2b2b2b;
   }
   h1 { margin-bottom: 0.25rem; }
-  #status {
+  p.hint { max-width: 480px; text-align: center; color: #555; font-size: 0.9rem; }
+
+  /* --- lobby --- */
+  #lobby-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1.5rem;
+    border: 2px dashed #3b2f2f;
+    border-radius: 10px;
+    background: white;
+    min-width: 260px;
+    text-align: center;
+  }
+  #lobby-panel button {
+    padding: 0.6rem 1.2rem;
+    font-size: 1rem;
+    cursor: pointer;
+    border-radius: 6px;
+    border: 1px solid #3b2f2f;
+    background: #eeeed2;
+  }
+  .spinner {
+    width: 22px; height: 22px;
+    border: 3px solid #ccc;
+    border-top-color: #3b2f2f;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* --- board --- */
+  .status {
     font-size: 1.1rem;
     margin-bottom: 1rem;
     min-height: 1.5em;
     font-weight: 600;
+    text-align: center;
   }
-  #board {
+  .you-are {
+    font-size: 0.9rem;
+    color: #555;
+    margin-bottom: 0.5rem;
+  }
+  .board {
     display: grid;
     grid-template-columns: repeat(8, min(11vw, 60px));
     grid-template-rows: repeat(8, min(11vw, 60px));
@@ -52,8 +91,14 @@
     border-radius: 50%;
     background: rgba(0, 0, 0, 0.25);
   }
-  #reset {
+  .controls {
     margin-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .controls button {
     padding: 0.5rem 1rem;
     font-size: 0.9rem;
     cursor: pointer;
@@ -61,35 +106,39 @@
     border: 1px solid #3b2f2f;
     background: white;
   }
-  p.hint { max-width: 480px; text-align: center; color: #555; font-size: 0.9rem; }
+  .controls .accept { background: #cdeccd; }
+  .controls .decline { background: #f2caca; }
+  .controls .note { font-size: 0.85rem; color: #555; }
 </style>
 </head>
 <body>
 
 <h1>♟️ 2-Player Chess</h1>
 <p class="hint">
-  Share this page's URL with your opponent — anyone who opens it joins the same
-  game. It's White's move first; click a piece, then click a square to move it.
-  Only the side whose turn it is can move.
+  Share this page's URL. The first person to click "Join Game" opens a room
+  and waits; the next person to click is matched into that room automatically.
+  Each seat can only move its own color, and a reset needs both players to agree.
 </p>
 
-<div id="status"></div>
-
-<!-- can-play turns this wrapper into a synced, collaborative element via playhtml.
-     The board grid and the reset button both live inside it so both can use
-     the same onClick/setData wiring. -->
-<div id="board-wrap" can-play>
-  <div id="board"></div>
-  <button id="reset" data-action="reset">Reset game</button>
+<!-- Lobby: a single shared element that tracks open/waiting rooms.
+     Its own click ("Join Game") is the only place writes happen, per
+     playhtml's guidance to drive shared-state writes from explicit events. -->
+<div id="lobby" can-play>
+  <div id="lobby-panel">
+    <p id="lobby-message">Loading…</p>
+    <button id="join-btn" data-action="join" style="display:none;">Join Game</button>
+    <div id="lobby-spinner" class="spinner" style="display:none;"></div>
+  </div>
 </div>
 
-<script>
-  const wrapEl = document.getElementById("board-wrap");
-  const boardEl = document.getElementById("board");
-  const statusEl = document.getElementById("status");
+<!-- The actual board is created dynamically once two players are matched;
+     see ensureBoardCreated() below. -->
+<div id="game-container"></div>
 
+<script>
+  // ---------- shared chess helpers ----------
   const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
-  const START_FEN = "start"; // chess.js accepts "start" as shorthand
+  const START_FEN = "start"; // chess.js shorthand for the starting position
 
   const PIECE_UNICODE = {
     wp: "♙", wn: "♘", wb: "♗", wr: "♖", wq: "♕", wk: "♔",
@@ -102,100 +151,295 @@
     return game;
   }
 
-  function statusText(game) {
+  function statusText(game, myColor) {
     if (game.in_checkmate()) {
-      return `Checkmate — ${game.turn() === "w" ? "Black" : "White"} wins! (click "Reset game" to play again)`;
+      const winner = game.turn() === "w" ? "Black" : "White";
+      return `Checkmate — ${winner} wins!`;
     }
     if (game.in_draw() || game.in_stalemate() || game.in_threefold_repetition()) {
       return "Draw.";
     }
     const side = game.turn() === "w" ? "White" : "Black";
-    return game.in_check() ? `${side} to move — check!` : `${side} to move`;
+    const suffix = game.in_check() ? " — check!" : "";
+    if (myColor && side.toLowerCase() !== myColor) return `${side} to move${suffix}`;
+    return `${side} to move${suffix}${myColor ? " (your move)" : ""}`;
   }
 
-  // Renders the DOM from the shared data. Called on load and whenever
-  // the synced data changes (locally or from the other player).
-  function render(data) {
+  // ---------- identity (per browser tab) ----------
+  function getOrCreate(key) {
+    let v = sessionStorage.getItem(key);
+    if (!v) {
+      v = (crypto.randomUUID ? crypto.randomUUID() : "id-" + Math.random().toString(36).slice(2) + Date.now());
+      sessionStorage.setItem(key, v);
+    }
+    return v;
+  }
+  const myId = getOrCreate("chessPlayerId");
+
+  function makeRoomId() {
+    return crypto.randomUUID ? crypto.randomUUID() : "r-" + Math.random().toString(36).slice(2) + Date.now();
+  }
+
+  // ---------- lobby wiring ----------
+  const lobbyEl = document.getElementById("lobby");
+  const lobbyMessage = document.getElementById("lobby-message");
+  const joinBtn = document.getElementById("join-btn");
+  const lobbySpinner = document.getElementById("lobby-spinner");
+
+  let latestLobbyData = { rooms: {} };
+  let joinRaceLost = false;
+  let boardCreatedForRoom = null;
+
+  lobbyEl.defaultData = { rooms: {} };
+
+  lobbyEl.updateElement = ({ data }) => {
+    latestLobbyData = data || { rooms: {} };
+    renderApp();
+  };
+
+  lobbyEl.onClick = (e, { data, setData }) => {
+    if (!e.target.closest('[data-action="join"]')) return;
+    joinRaceLost = false;
+
+    const rooms = data.rooms || {};
+    const waiting = Object.entries(rooms)
+      .filter(([id, r]) => r && r.guest == null && r.host !== myId)
+      .sort((a, b) => (a[1].createdAt || 0) - (b[1].createdAt || 0));
+
+    if (waiting.length > 0) {
+      // Claim the oldest open room as its second (Black) player.
+      const [roomId] = waiting[0];
+      setData((draft) => {
+        draft.rooms[roomId].guest = myId;
+      });
+      sessionStorage.setItem("chessRoomId", roomId);
+      sessionStorage.setItem("chessColor", "black");
+      // Two players could race for the same open seat; re-check shortly
+      // whether our claim actually stuck once the sync settles.
+      setTimeout(() => verifyClaim(roomId), 600);
+    } else {
+      // No open room: create one and wait as White.
+      const roomId = makeRoomId();
+      setData((draft) => {
+        draft.rooms = draft.rooms || {};
+        draft.rooms[roomId] = { host: myId, guest: null, createdAt: Date.now() };
+      });
+      sessionStorage.setItem("chessRoomId", roomId);
+      sessionStorage.setItem("chessColor", "white");
+    }
+    renderApp();
+  };
+
+  function verifyClaim(roomId) {
+    const room = (latestLobbyData.rooms || {})[roomId];
+    if (!room || room.guest !== myId) {
+      // Someone else grabbed that seat first — clear our tentative claim.
+      sessionStorage.removeItem("chessRoomId");
+      sessionStorage.removeItem("chessColor");
+      joinRaceLost = true;
+    }
+    renderApp();
+  }
+
+  // ---------- top-level render / state machine ----------
+  function renderApp() {
+    const roomId = sessionStorage.getItem("chessRoomId");
+    const room = roomId ? (latestLobbyData.rooms || {})[roomId] : null;
+
+    if (!roomId || !room) {
+      // Not in a room: show the Join button.
+      document.getElementById("game-container").style.display = "none";
+      document.getElementById("lobby-panel").style.display = "flex";
+      joinBtn.style.display = "inline-block";
+      lobbySpinner.style.display = "none";
+      lobbyMessage.textContent = joinRaceLost
+        ? "That seat was just taken by someone else — try again."
+        : "Click to join the queue. You'll get matched automatically.";
+      return;
+    }
+
+    if (room.guest == null) {
+      // We're the host, still waiting for an opponent.
+      document.getElementById("game-container").style.display = "none";
+      document.getElementById("lobby-panel").style.display = "flex";
+      joinBtn.style.display = "none";
+      lobbySpinner.style.display = "block";
+      lobbyMessage.textContent = "Room created — waiting for an opponent to join…";
+      return;
+    }
+
+    // Matched! Hide the lobby, show (and if needed, create) the board.
+    document.getElementById("lobby-panel").style.display = "none";
+    document.getElementById("game-container").style.display = "block";
+    ensureBoardCreated(roomId, room.host, room.guest);
+  }
+
+  // ---------- dynamic board (created once per matched room) ----------
+  function ensureBoardCreated(roomId, hostId, guestId) {
+    if (boardCreatedForRoom === roomId) return;
+    boardCreatedForRoom = roomId;
+
+    const el = document.createElement("div");
+    el.id = "chess-board-" + roomId;
+    el.setAttribute("can-play", ""); // mirrors the declarative `can-play` attribute
+    el.innerHTML =
+      '<p class="you-are"></p>' +
+      '<div class="status"></div>' +
+      '<div class="board"></div>' +
+      '<div class="controls"></div>';
+
+    // Must be set before handing the element to playhtml.
+    el.defaultData = {
+      fen: START_FEN,
+      selected: null,
+      resetRequestedBy: null, // null | "white" | "black"
+      white: hostId,
+      black: guestId,
+    };
+
+    el.updateElement = ({ data }) => renderBoard(el, data);
+
+    el.onClick = (e, { data, setData }) => {
+      const myColor = data.white === myId ? "white" : data.black === myId ? "black" : null;
+      if (!myColor) return; // spectators can't act (shouldn't normally happen)
+
+      const action = e.target.dataset.action;
+      if (action === "request-reset") {
+        if (!data.resetRequestedBy) setData({ ...data, resetRequestedBy: myColor });
+        return;
+      }
+      if (action === "cancel-reset") {
+        if (data.resetRequestedBy === myColor) setData({ ...data, resetRequestedBy: null });
+        return;
+      }
+      if (action === "decline-reset") {
+        setData({ ...data, resetRequestedBy: null });
+        return;
+      }
+      if (action === "accept-reset") {
+        setData({ ...data, fen: START_FEN, selected: null, resetRequestedBy: null });
+        return;
+      }
+
+      const squareEl = e.target.closest(".square");
+      if (!squareEl) return;
+      const square = squareEl.dataset.square;
+
+      const game = gameFromFen(data.fen);
+      if (game.game_over()) return;
+
+      // Right-to-move limit: only the player whose color matches the side
+      // to move can select or move pieces.
+      if (myColor !== game.turn()) return;
+
+      if (!data.selected) {
+        const piece = game.get(square);
+        if (piece && piece.color === game.turn()) {
+          setData({ ...data, selected: square });
+        }
+        return;
+      }
+
+      if (square === data.selected) {
+        setData({ ...data, selected: null });
+        return;
+      }
+
+      const move = game.move({ from: data.selected, to: square, promotion: "q" });
+      if (move) {
+        setData({ ...data, fen: game.fen(), selected: null });
+        return;
+      }
+
+      const piece = game.get(square);
+      if (piece && piece.color === game.turn()) {
+        setData({ ...data, selected: square });
+      } else {
+        setData({ ...data, selected: null });
+      }
+    };
+
+    document.getElementById("game-container").appendChild(el);
+    playhtml.setupPlayElement(el);
+  }
+
+  function renderBoard(el, data) {
+    const myColor = data.white === myId ? "white" : data.black === myId ? "black" : null;
     const game = gameFromFen(data.fen);
     const legalTargets = data.selected
       ? game.moves({ square: data.selected, verbose: true }).map((m) => m.to)
       : [];
 
+    const youAreEl = el.querySelector(".you-are");
+    youAreEl.textContent = myColor
+      ? `You are playing ${myColor === "white" ? "White" : "Black"}.`
+      : "";
+
+    const boardEl = el.querySelector(".board");
     boardEl.innerHTML = "";
     for (let rank = 8; rank >= 1; rank--) {
       for (let fileIdx = 0; fileIdx < 8; fileIdx++) {
         const square = FILES[fileIdx] + rank;
         const sq = document.createElement("div");
         sq.dataset.square = square;
-        sq.className =
-          "square " + ((fileIdx + rank) % 2 === 0 ? "dark" : "light");
+        sq.className = "square " + ((fileIdx + rank) % 2 === 0 ? "dark" : "light");
         if (square === data.selected) sq.classList.add("selected");
         if (legalTargets.includes(square)) sq.classList.add("legal");
-
         const piece = game.get(square);
         if (piece) sq.textContent = PIECE_UNICODE[piece.color + piece.type];
-
         boardEl.appendChild(sq);
       }
     }
-    statusEl.textContent = statusText(game);
+
+    el.querySelector(".status").textContent = statusText(game, myColor);
+
+    // Reset-with-consent controls.
+    const controls = el.querySelector(".controls");
+    controls.innerHTML = "";
+    if (!myColor) {
+      // spectator-ish edge case; nothing to show
+    } else if (!data.resetRequestedBy) {
+      const btn = document.createElement("button");
+      btn.textContent = "Request Reset";
+      btn.dataset.action = "request-reset";
+      controls.appendChild(btn);
+    } else if (data.resetRequestedBy === myColor) {
+      const note = document.createElement("p");
+      note.className = "note";
+      note.textContent = "Waiting for your opponent to accept the reset…";
+      const btn = document.createElement("button");
+      btn.textContent = "Cancel request";
+      btn.dataset.action = "cancel-reset";
+      controls.appendChild(note);
+      controls.appendChild(btn);
+    } else {
+      const note = document.createElement("p");
+      note.className = "note";
+      note.textContent = "Your opponent wants to reset the game.";
+      const accept = document.createElement("button");
+      accept.className = "accept";
+      accept.textContent = "Accept";
+      accept.dataset.action = "accept-reset";
+      const decline = document.createElement("button");
+      decline.className = "decline";
+      decline.textContent = "Decline";
+      decline.dataset.action = "decline-reset";
+      controls.appendChild(note);
+      controls.appendChild(accept);
+      controls.appendChild(decline);
+    }
   }
 
-  // --- playhtml "can-play" wiring ---
-  // IMPORTANT: this must be set *before* the playhtml script below runs.
-  wrapEl.defaultData = { fen: START_FEN, selected: null };
-
-  wrapEl.updateElement = ({ data }) => render(data);
-
-  wrapEl.onClick = (e, { data, setData }) => {
-    // Reset button, also inside this can-play element.
-    if (e.target.closest('[data-action="reset"]')) {
-      setData({ fen: START_FEN, selected: null });
-      return;
-    }
-
-    const squareEl = e.target.closest(".square");
-    if (!squareEl) return;
-    const square = squareEl.dataset.square;
-
-    const game = gameFromFen(data.fen);
-    if (game.game_over()) return;
-
-    // Nothing selected yet: select a piece belonging to the side to move.
-    if (!data.selected) {
-      const piece = game.get(square);
-      if (piece && piece.color === game.turn()) {
-        setData({ ...data, selected: square });
-      }
-      return;
-    }
-
-    // Clicking the same square deselects.
-    if (square === data.selected) {
-      setData({ ...data, selected: null });
-      return;
-    }
-
-    // Try to make the move (auto-queen on promotion, kept minimal).
-    const move = game.move({ from: data.selected, to: square, promotion: "q" });
-    if (move) {
-      setData({ fen: game.fen(), selected: null });
-      return;
-    }
-
-    // Illegal target: if it's another of the mover's own pieces, re-select it.
-    const piece = game.get(square);
-    if (piece && piece.color === game.turn()) {
-      setData({ ...data, selected: square });
-    } else {
-      setData({ ...data, selected: null });
-    }
-  };
+  // If this tab already had a room from before a reload, resume it
+  // immediately rather than waiting only on the lobby's first sync.
+  renderApp();
 </script>
 
-<!-- playhtml: syncs and persists the board's data across everyone viewing this page -->
+<!-- playhtml: syncs and persists lobby + board data across everyone viewing
+     this page. Imported last, after the elements/handlers above are set up. -->
 <script type="module">
   import { playhtml } from "https://unpkg.com/playhtml@latest";
+  window.playhtml = playhtml; // used by ensureBoardCreated() above
   playhtml.init();
 </script>
 
